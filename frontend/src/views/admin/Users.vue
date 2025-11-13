@@ -1320,6 +1320,8 @@ export default {
 
     onUnmounted(() => {
       window.removeEventListener('resize', handleResize)
+      // 移除订阅管理更新设备限制的事件监听
+      window.removeEventListener('subscription-device-limit-updated', loadUsers)
     })
 
       return {
