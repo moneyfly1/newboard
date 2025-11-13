@@ -28,6 +28,12 @@ const routes = [
     component: () => import('@/views/ForgotPassword.vue'),
     meta: { requiresGuest: true }
   },
+  {
+    path: '/admin/login',
+    name: 'AdminLogin',
+    component: () => import('@/views/admin/AdminLogin.vue'),
+    meta: { requiresGuest: true }
+  },
   
   // 用户端路由
   {
@@ -239,7 +245,7 @@ router.beforeEach((to, from, next) => {
       
       if (loginData) {
         const loginDataObj = JSON.parse(loginData)
-        const { token: userToken, user: userData, timestamp: dataTimestamp } = loginDataObj
+        const { token: userToken, user: userData, timestamp: dataTimestamp, adminToken, adminUser } = loginDataObj
         
         // 检查数据是否过期（5分钟内有效）
         if (Date.now() - dataTimestamp > 5 * 60 * 1000) {
@@ -254,6 +260,22 @@ router.beforeEach((to, from, next) => {
         
         // 清除临时sessionKey
         sessionStorage.removeItem(sessionKey)
+        
+        // 如果有管理员信息，先保存到 localStorage（用于返回管理员后台）
+        if (adminToken && adminUser) {
+          try {
+            const adminUserData = typeof adminUser === 'string' ? JSON.parse(adminUser) : adminUser
+            // 验证是否为管理员
+            if (adminUserData.is_admin) {
+              secureStorage.set('admin_token', adminToken, false, 24 * 60 * 60 * 1000)
+              secureStorage.set('admin_user', adminUserData, false, 24 * 60 * 60 * 1000)
+            }
+          } catch (e) {
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('解析管理员信息失败:', e)
+            }
+          }
+        }
         
         // 确保用户数据中的 is_admin 为 false（管理员以用户身份登录时，用户不是管理员）
         const finalUserData = {
@@ -296,12 +318,37 @@ router.beforeEach((to, from, next) => {
       const userToken = to.query.token
       const userData = JSON.parse(decodeURIComponent(to.query.user))
       
+      // 检查用户数据中是否包含管理员信息（从 Users.vue 传递的）
+      if (userData._adminToken && userData._adminUser) {
+        try {
+          const adminUserData = typeof userData._adminUser === 'string' ? JSON.parse(userData._adminUser) : userData._adminUser
+          // 验证是否为管理员
+          if (adminUserData.is_admin) {
+            secureStorage.set('admin_token', userData._adminToken, false, 24 * 60 * 60 * 1000)
+            secureStorage.set('admin_user', adminUserData, false, 24 * 60 * 60 * 1000)
+          }
+        } catch (e) {
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('解析管理员信息失败:', e)
+          }
+        }
+        // 移除临时字段
+        delete userData._adminToken
+        delete userData._adminUser
+      }
+      
+      // 确保用户数据中的 is_admin 为 false
+      const finalUserData = {
+        ...userData,
+        is_admin: false
+      }
+      
       // 使用sessionStorage保存用户token和用户信息
       secureStorage.set('user_token', userToken, true, 24 * 60 * 60 * 1000)
-      secureStorage.set('user_data', userData, true, 24 * 60 * 60 * 1000)
+      secureStorage.set('user_data', finalUserData, true, 24 * 60 * 60 * 1000)
       
       // 设置authStore中的用户token和用户信息
-      authStore.setAuth(userToken, userData, true)
+      authStore.setAuth(userToken, finalUserData, true)
       
       const themeStore = useThemeStore()
       themeStore.loadUserTheme().catch(() => {})
@@ -319,21 +366,22 @@ router.beforeEach((to, from, next) => {
     }
   }
   
+  // 管理员路由：只恢复管理员认证状态
   if (to.path.startsWith('/admin')) {
-    const adminToken = secureStorage.get('admin_token') || secureStorage.get('token')
-    const adminUserRaw = secureStorage.get('admin_user') || secureStorage.get('user')
+    const adminToken = secureStorage.get('admin_token')
+    const adminUserRaw = secureStorage.get('admin_user')
     
     if (adminToken && adminUserRaw) {
       try {
-        // 如果已经是对象，直接使用；如果是字符串，则解析
         const adminUserData = typeof adminUserRaw === 'string' ? JSON.parse(adminUserRaw) : adminUserRaw
-        // 如果当前不是管理员身份，或者token不匹配，恢复管理员身份
-        if (!authStore.isAdmin || authStore.token !== adminToken) {
-          // 管理员路由使用localStorage
-          authStore.setAuth(adminToken, adminUserData, false)
-          
-          const themeStore = useThemeStore()
-          themeStore.loadUserTheme().catch(() => {})
+        // 验证是否为管理员
+        if (adminUserData.is_admin) {
+          // 如果当前不是管理员身份，或者token不匹配，恢复管理员身份
+          if (!authStore.isAdmin || authStore.token !== adminToken) {
+            authStore.setAuth(adminToken, adminUserData, false)
+            const themeStore = useThemeStore()
+            themeStore.loadUserTheme().catch(() => {})
+          }
         }
       } catch (error) {
         if (process.env.NODE_ENV === 'development') {
@@ -341,80 +389,77 @@ router.beforeEach((to, from, next) => {
         }
       }
     }
-  }
-  
-  // 页面加载时，根据路由类型恢复认证状态
-  // 如果是管理员路由，使用localStorage；如果是用户路由，优先使用sessionStorage
-  // 注意：如果已经通过 sessionKey 设置了用户信息，则不再恢复认证状态（避免覆盖）
-  if (!authStore.isAuthenticated) {
-    let token = null
-    let userData = null
-    
-    if (to.path.startsWith('/admin')) {
-      token = secureStorage.get('admin_token') || secureStorage.get('token')
-      const adminUserStr = secureStorage.get('admin_user') || secureStorage.get('user')
-      if (adminUserStr) {
+  } else {
+    // 用户路由：只恢复用户认证状态
+    if (!authStore.isAuthenticated) {
+      const userToken = secureStorage.get('user_token')
+      const userDataStr = secureStorage.get('user_data')
+      
+      if (userToken && userDataStr) {
         try {
-          userData = JSON.parse(adminUserStr)
-        } catch (e) {
+          const userData = typeof userDataStr === 'string' ? JSON.parse(userDataStr) : userDataStr
+          // 确保不是管理员账户
+          if (!userData.is_admin) {
+            authStore.setAuth(userToken, userData, true)
+            const themeStore = useThemeStore()
+            themeStore.loadUserTheme().catch(() => {})
+          }
+        } catch (error) {
           // 忽略解析错误
         }
-      }
-    } else {
-      token = secureStorage.get('user_token') || secureStorage.get('token')
-      const userDataStr = secureStorage.get('user_data') || secureStorage.get('user')
-      if (userDataStr) {
-        try {
-          userData = typeof userDataStr === 'string' ? JSON.parse(userDataStr) : userDataStr
-        } catch (e) {
-          // 忽略解析错误
-        }
-      }
-    }
-    
-    if (token && userData) {
-      try {
-        // 恢复认证状态
-        const useSessionStorage = !to.path.startsWith('/admin')
-        authStore.setAuth(token, userData, useSessionStorage)
-        
-        const themeStore = useThemeStore()
-        themeStore.loadUserTheme().catch(() => {})
-      } catch (error) {
-        if (to.path.startsWith('/admin')) {
-          secureStorage.remove('admin_token')
-          secureStorage.remove('admin_user')
-        } else {
-          secureStorage.remove('user_token')
-          secureStorage.remove('user_data')
-        }
-        secureStorage.remove('token')
-        secureStorage.remove('refresh_token')
-        secureStorage.remove('user')
       }
     }
   }
   
   // 需要认证的页面
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next('/login')
+    // 根据路径判断跳转到哪个登录页面
+    if (to.path.startsWith('/admin')) {
+      next('/admin/login')
+    } else {
+      next('/login')
+    }
     return
   }
   
   // 需要管理员权限的页面
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
-    // 如果不是管理员，重定向到普通用户仪表盘
-    next('/dashboard')
+    // 如果已登录但不是管理员，重定向到普通用户仪表盘
+    if (authStore.isAuthenticated) {
+      next('/dashboard')
+    } else {
+      // 未登录，跳转到管理员登录页面
+      next('/admin/login')
+    }
     return
   }
   
   // 已登录用户不能访问登录/注册页面
   if (to.meta.requiresGuest && authStore.isAuthenticated) {
-    // 根据用户权限重定向
-    if (authStore.isAdmin) {
-      next('/admin/dashboard')
+    // 根据路径和用户权限重定向
+    if (to.path === '/admin/login') {
+      // 管理员登录页面：只有管理员可以访问，已登录管理员跳转到后台
+      if (authStore.isAdmin) {
+        next('/admin/dashboard')
+      } else {
+        // 普通用户访问管理员登录页面，跳转到用户登录页面
+        next('/login')
+      }
+    } else if (to.path === '/login') {
+      // 用户登录页面：只有普通用户可以访问，已登录用户跳转到仪表盘
+      if (authStore.isAdmin) {
+        // 管理员访问用户登录页面，跳转到管理员登录页面
+        next('/admin/login')
+      } else {
+        next('/dashboard')
+      }
     } else {
-      next('/dashboard')
+      // 其他需要访客的页面（注册、忘记密码等）
+      if (authStore.isAdmin) {
+        next('/admin/dashboard')
+      } else {
+        next('/dashboard')
+      }
     }
     return
   }

@@ -390,7 +390,7 @@ export default {
           passwordFormRef.value?.clearValidate()
           setTimeout(() => {
             authStore.logout()
-            router.push('/login')
+            router.push('/admin/login')
           }, 1500)
         } else {
           ElMessage.error(message || '密码修改失败')

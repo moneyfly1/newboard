@@ -1500,22 +1500,27 @@ export default {
         }
         
         // 保存管理员信息到 localStorage（用于返回管理员后台）
-        const adminToken = secureStorage.get('token') || secureStorage.get('admin_token')
-        const adminUser = secureStorage.get('user') || secureStorage.get('admin_user')
-        if (adminToken && adminUser) {
-          secureStorage.set('admin_token', adminToken, false, 24 * 60 * 60 * 1000)
-          secureStorage.set('admin_user', adminUser, false, 24 * 60 * 60 * 1000)
-        }
+        const adminToken = secureStorage.get('admin_token')
+        const adminUser = secureStorage.get('admin_user')
         
         const userToken = response.data.data.token
         const userData = response.data.data.user
 
+        // 在 sessionKey 中也包含管理员信息，以便在新标签页中恢复
         const sessionKey = `user_login_${Date.now()}`
-        sessionStorage.setItem(sessionKey, JSON.stringify({
+        const sessionData = {
           token: userToken,
           user: userData,
           timestamp: Date.now()
-        }))
+        }
+        
+        // 如果有管理员信息，也保存到 sessionData 中
+        if (adminToken && adminUser) {
+          sessionData.adminToken = adminToken
+          sessionData.adminUser = typeof adminUser === 'string' ? adminUser : JSON.stringify(adminUser)
+        }
+        
+        sessionStorage.setItem(sessionKey, JSON.stringify(sessionData))
 
         const dashboardUrl = window.location.origin + '/dashboard'
         const finalUrl = `${dashboardUrl}?sessionKey=${sessionKey}`

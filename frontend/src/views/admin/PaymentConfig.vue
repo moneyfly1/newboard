@@ -284,13 +284,12 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download, Operation, Plus, Edit, Delete, DataAnalysis } from '@element-plus/icons-vue'
-import { useApi } from '@/utils/api'
+import { paymentAPI } from '@/utils/api'
 
 export default {
   name: 'AdminPaymentConfig',
   components: { Download, Operation, Plus, Edit, Delete, DataAnalysis },
   setup() {
-    const api = useApi()
     const loading = ref(false)
     const saving = ref(false)
     const paymentConfigs = ref([])
@@ -335,21 +334,30 @@ export default {
     const loadPaymentConfigs = async () => {
       loading.value = true
       try {
-        // 使用完整的API路径，确保代理正确工作
-        const response = await api.get('/payment-config/', {
-          params: {
-            page: 1,
-            size: 100  // 获取更多配置
-          }
+        // 使用管理员API获取支付配置列表
+        const response = await paymentAPI.getPaymentConfigs({
+          page: 1,
+          size: 100  // 获取更多配置
         })
         // 处理响应数据
         if (response && response.data) {
-          if (response.data.items && Array.isArray(response.data.items)) {
+          // 处理标准响应格式 { success: true, data: { items: [...], total: ... } }
+          if (response.data.success && response.data.data) {
+            if (response.data.data.items && Array.isArray(response.data.data.items)) {
+              paymentConfigs.value = response.data.data.items
+            } else if (Array.isArray(response.data.data)) {
+              paymentConfigs.value = response.data.data
+            } else {
+              paymentConfigs.value = []
+            }
+          } 
+          // 处理直接返回 items 的格式 { items: [...], total: ... }
+          else if (response.data.items && Array.isArray(response.data.items)) {
             paymentConfigs.value = response.data.items
-          } else if (Array.isArray(response.data)) {
+          } 
+          // 处理直接返回数组的格式 [...]
+          else if (Array.isArray(response.data)) {
             paymentConfigs.value = response.data
-          } else if (response.data.data && Array.isArray(response.data.data)) {
-            paymentConfigs.value = response.data.data
           } else {
             paymentConfigs.value = []
           }
@@ -411,10 +419,10 @@ export default {
         }
 
         if (editingConfig.value) {
-          await api.put(`/payment-config/${editingConfig.value.id}`, requestData)
+          await paymentAPI.updatePaymentConfig(editingConfig.value.id, requestData)
           ElMessage.success('支付配置更新成功')
         } else {
-          await api.post('/payment-config', requestData)
+          await paymentAPI.createPaymentConfig(requestData)
           ElMessage.success('支付配置创建成功')
         }
 
@@ -469,7 +477,7 @@ export default {
           '确认删除',
           { type: 'warning' }
         )
-        await api.delete(`/payment-config/${config.id}`)
+        await paymentAPI.deletePaymentConfig(config.id)
         ElMessage.success('支付配置删除成功')
         loadPaymentConfigs()
       } catch (error) {
@@ -486,8 +494,8 @@ export default {
       const oldStatus = newStatus === 1 ? 0 : 1
       
       try {
-        // 使用查询参数传递status - axios的PUT请求需要将查询参数放在URL中
-        const response = await api.put(`/payment-config/${config.id}/status?status=${newStatus}`)
+        // 使用管理员API更新支付配置状态
+        const response = await paymentAPI.updatePaymentConfig(config.id, { status: newStatus })
         
         // 如果响应成功，使用返回的数据更新状态
         if (response.data && response.data.status !== undefined) {

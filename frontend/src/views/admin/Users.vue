@@ -1137,17 +1137,22 @@ export default {
         ElMessage.success('登录成功，正在跳转...')
         
         // 保存管理员信息到 secureStorage（用于返回管理员后台）
-        const adminToken = secureStorage.get('token') || secureStorage.get('admin_token')
-        const adminUser = secureStorage.get('user') || secureStorage.get('admin_user')
-        if (adminToken && adminUser) {
-          secureStorage.set('admin_token', adminToken, false, 24 * 60 * 60 * 1000)
-          secureStorage.set('admin_user', adminUser, false, 24 * 60 * 60 * 1000)
-        }
+        const adminToken = secureStorage.get('admin_token')
+        const adminUser = secureStorage.get('admin_user')
         
         // 通过URL参数传递token和用户信息，在新标签页中打开用户后台
         const userToken = response.data.data.token
         const userData = response.data.data.user
-        const userDataStr = encodeURIComponent(JSON.stringify(userData))
+        
+        // 构建用户数据，如果存在管理员信息，也包含在用户数据中
+        let userDataToSend = { ...userData }
+        if (adminToken && adminUser) {
+          // 将管理员信息编码到用户数据中（通过一个特殊字段）
+          userDataToSend._adminToken = adminToken
+          userDataToSend._adminUser = typeof adminUser === 'string' ? adminUser : JSON.stringify(adminUser)
+        }
+        
+        const userDataStr = encodeURIComponent(JSON.stringify(userDataToSend))
         
         // 在新标签页中打开用户后台，通过URL参数传递认证信息
         const dashboardUrl = `/dashboard?token=${userToken}&user=${userDataStr}`

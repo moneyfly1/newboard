@@ -18,17 +18,47 @@ const handleLogout = () => {
   const authStore = useAuthStore()
   authStore.logout()
   const currentPath = router.currentRoute.value.path
-  if (currentPath !== '/login' && currentPath !== '/forgot-password') {
-    router.push('/login')
+  // 根据当前路径跳转到对应的登录页面
+  if (currentPath.startsWith('/admin')) {
+    if (currentPath !== '/admin/login') {
+      router.push('/admin/login')
+    }
+  } else {
+    if (currentPath !== '/login' && currentPath !== '/forgot-password') {
+      router.push('/login')
+    }
   }
 }
 
 api.interceptors.request.use(
   config => {
-    const isAdminAPI = config.url && config.url.startsWith('/api/v1/admin')
+    // 由于 baseURL 是 '/api/v1'，config.url 不包含 baseURL 前缀
+    // 判断是否为管理员API：
+    // 1. 路径以 '/admin' 开头
+    // 2. 路径中包含 '/admin/'
+    // 3. 特定的管理员API路径（即使不在 /admin 下）
+    const adminPaths = [
+      '/admin',
+      '/payment-config',  // 支付配置（管理员功能）
+      '/software-config',  // 软件配置（管理员功能）
+      '/config/admin',  // 配置管理
+      '/notifications/admin'  // 通知管理
+    ]
+    const isAdminAPI = config.url && (
+      config.url.startsWith('/admin') || 
+      config.url.includes('/admin/') ||
+      adminPaths.some(path => config.url.startsWith(path))
+    )
+    // 根据 API 类型获取对应的 token
     const token = isAdminAPI
-      ? secureStorage.get('admin_token') || secureStorage.get('token')
-      : secureStorage.get('user_token') || secureStorage.get('token')
+      ? secureStorage.get('admin_token')
+      : secureStorage.get('user_token')
+    
+    // 如果token不存在，在开发环境下输出警告
+    if (!token && process.env.NODE_ENV === 'development') {
+      console.warn(`[API] 缺少 ${isAdminAPI ? 'admin' : 'user'} token for ${config.url}`)
+    }
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -103,7 +133,20 @@ api.interceptors.response.use(
       } catch (e) {}
     }
     if (error.response?.status === 401) {
-      const isAdminAPI = error.config?.url && error.config.url.startsWith('/api/v1/admin')
+      // 由于 baseURL 是 '/api/v1'，config.url 不包含 baseURL 前缀
+      // 判断是否为管理员API：路径以 '/admin' 开头，或者路径中包含 '/admin/'，或者特定的管理员API路径
+      const adminPaths = [
+        '/admin',
+        '/payment-config',
+        '/software-config',
+        '/config/admin',
+        '/notifications/admin'
+      ]
+      const isAdminAPI = error.config?.url && (
+        error.config.url.startsWith('/admin') || 
+        error.config.url.includes('/admin/') ||
+        adminPaths.some(path => error.config.url.startsWith(path))
+      )
       const refreshKey = isAdminAPI ? 'admin' : 'user'
 
       if (refreshFailed[refreshKey]) {
@@ -145,7 +188,7 @@ api.interceptors.response.use(
 
         try {
           const refreshTokenKey = isAdminAPI ? 'admin_refresh_token' : 'user_refresh_token'
-          const refreshToken = secureStorage.get(refreshTokenKey) || secureStorage.get('refresh_token')
+          const refreshToken = secureStorage.get(refreshTokenKey)
 
           const refreshResponse = await axios.post('/api/v1/auth/refresh', {}, {
             withCredentials: true,
@@ -166,10 +209,6 @@ api.interceptors.response.use(
               if (refresh_token) {
                 secureStorage.set('user_refresh_token', refresh_token, true, REFRESH_TOKEN_TTL)
               }
-            }
-            secureStorage.set('token', access_token, !isAdminAPI, TOKEN_TTL)
-            if (refresh_token) {
-              secureStorage.set('refresh_token', refresh_token, !isAdminAPI, REFRESH_TOKEN_TTL)
             }
 
             const authStore = useAuthStore()
@@ -390,10 +429,10 @@ export const paymentAPI = {
   getPaymentMethods: () => api.get('/payment-methods/active'),
   createPayment: (data) => api.post('/create-payment', data),
   getPaymentStatus: (transactionId) => api.get(`/payment-status/${transactionId}`),
-  getPaymentConfigs: (params) => api.get('/admin/payment-configs', { params }),
-  createPaymentConfig: (data) => api.post('/admin/payment-configs', data),
-  updatePaymentConfig: (configId, data) => api.put(`/admin/payment-configs/${configId}`, data),
-  deletePaymentConfig: (configId) => api.delete(`/admin/payment-configs/${configId}`),
+  getPaymentConfigs: (params) => api.get('/payment-config/', { params }),
+  createPaymentConfig: (data) => api.post('/payment-config/', data),
+  updatePaymentConfig: (configId, data) => api.put(`/payment-config/${configId}`, data),
+  deletePaymentConfig: (configId) => api.delete(`/payment-config/${configId}`),
   getPaymentTransactions: (params) => api.get('/admin/payment-transactions', { params }),
   getPaymentTransactionDetail: (transactionId) => api.get(`/admin/payment-transactions/${transactionId}`),
   getPaymentStats: () => api.get('/admin/payment-stats'),

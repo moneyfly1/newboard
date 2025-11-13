@@ -10,43 +10,51 @@ export const useAuthStore = defineStore('auth', () => {
   const REFRESH_TOKEN_TTL = 7 * 24 * 60 * 60 * 1000
 
   const getInitialToken = () => {
-    if (typeof window === 'undefined') return secureStorage.get('token') || ''
+    if (typeof window === 'undefined') return ''
     const path = window.location.pathname
     if (path.startsWith('/admin')) {
-      return secureStorage.get('admin_token') || secureStorage.get('token') || ''
+      // 管理员路径：只获取管理员 token
+      return secureStorage.get('admin_token') || ''
     }
-    return secureStorage.get('user_token') || secureStorage.get('token') || ''
+    // 用户路径：只获取用户 token
+    return secureStorage.get('user_token') || ''
   }
 
   const getInitialUser = () => {
     try {
-      if (typeof window === 'undefined') return secureStorage.get('user')
+      if (typeof window === 'undefined') return null
       const path = window.location.pathname
       if (path.startsWith('/admin')) {
-        return secureStorage.get('admin_user') || secureStorage.get('user')
+        // 管理员路径：只获取管理员用户信息
+        const adminUser = secureStorage.get('admin_user')
+        if (adminUser) {
+          return typeof adminUser === 'string' ? JSON.parse(adminUser) : adminUser
+        }
+        return null
       }
-      return secureStorage.get('user_data') || secureStorage.get('user')
+      // 用户路径：只获取用户信息
+      const userData = secureStorage.get('user_data')
+      if (userData) {
+        return typeof userData === 'string' ? JSON.parse(userData) : userData
+      }
+      return null
     } catch (error) {
       secureStorage.remove('user_data')
-      secureStorage.remove('user')
+      secureStorage.remove('admin_user')
       return null
     }
   }
 
-  const saveToken = (accessToken) => {
-    const admin = isAdminPath()
-    secureStorage.set('token', accessToken, !admin, TOKEN_TTL)
-    if (admin) {
+  const saveToken = (accessToken, isAdmin = false) => {
+    if (isAdmin) {
       secureStorage.set('admin_token', accessToken, false, TOKEN_TTL)
     } else {
       secureStorage.set('user_token', accessToken, true, TOKEN_TTL)
     }
   }
 
-  const saveUser = (userData) => {
-    const admin = isAdminPath()
-    secureStorage.set('user', userData, !admin, TOKEN_TTL)
-    if (admin) {
+  const saveUser = (userData, isAdmin = false) => {
+    if (isAdmin) {
       secureStorage.set('admin_user', userData, false, TOKEN_TTL)
     } else {
       secureStorage.set('user_data', userData, true, TOKEN_TTL)
@@ -67,6 +75,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // 普通用户登录（只允许非管理员）
   const login = async (credentials) => {
     loading.value = true
     try {
@@ -75,21 +84,64 @@ export const useAuthStore = defineStore('auth', () => {
         password: credentials.password
       })
       const { access_token, refresh_token, user: userData } = response.data
+      
+      // 如果是管理员账户，不允许在用户登录页面登录
+      if (userData.is_admin) {
+        return {
+          success: false,
+          message: '管理员账户请使用管理员登录页面登录'
+        }
+      }
+      
       token.value = access_token
       user.value = userData
-      const admin = isAdminPath()
-      secureStorage.set('token', access_token, !admin, TOKEN_TTL)
-      secureStorage.set('refresh_token', refresh_token, !admin, REFRESH_TOKEN_TTL)
-      secureStorage.set('user', userData, !admin, TOKEN_TTL)
-      if (admin) {
-        secureStorage.set('admin_token', access_token, false, TOKEN_TTL)
-        secureStorage.set('admin_user', userData, false, TOKEN_TTL)
-        secureStorage.set('admin_refresh_token', refresh_token, false, REFRESH_TOKEN_TTL)
-      } else {
-        secureStorage.set('user_token', access_token, true, TOKEN_TTL)
-        secureStorage.set('user_data', userData, true, TOKEN_TTL)
-        secureStorage.set('user_refresh_token', refresh_token, true, REFRESH_TOKEN_TTL)
+      
+      // 用户登录使用 sessionStorage
+      secureStorage.set('user_token', access_token, true, TOKEN_TTL)
+      secureStorage.set('user_data', userData, true, TOKEN_TTL)
+      secureStorage.set('user_refresh_token', refresh_token, true, REFRESH_TOKEN_TTL)
+      
+      resetRefreshFailed()
+      try {
+        const themeStore = useThemeStore()
+        await themeStore.loadUserTheme()
+      } catch (themeError) {
+        // 主题加载失败不影响登录流程
       }
+      return { success: true }
+    } catch (error) {
+      return handleApiError(error, '登录失败')
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 管理员登录（只允许管理员）
+  const adminLogin = async (credentials) => {
+    loading.value = true
+    try {
+      const response = await api.post('/auth/login-json', {
+        username: credentials.username,
+        password: credentials.password
+      })
+      const { access_token, refresh_token, user: userData } = response.data
+      
+      // 验证是否为管理员
+      if (!userData.is_admin) {
+        return {
+          success: false,
+          message: '该账户不是管理员，请使用用户登录页面'
+        }
+      }
+      
+      token.value = access_token
+      user.value = userData
+      
+      // 管理员登录使用 localStorage
+      secureStorage.set('admin_token', access_token, false, TOKEN_TTL)
+      secureStorage.set('admin_user', userData, false, TOKEN_TTL)
+      secureStorage.set('admin_refresh_token', refresh_token, false, REFRESH_TOKEN_TTL)
+      
       resetRefreshFailed()
       try {
         const themeStore = useThemeStore()
@@ -120,20 +172,16 @@ export const useAuthStore = defineStore('auth', () => {
   const logout = () => {
     token.value = ''
     user.value = null
-    const admin = isAdminPath()
     
-    // 清除所有角色的token和用户数据
-    if (admin) {
-      secureStorage.remove('admin_token')
-      secureStorage.remove('admin_user')
-      secureStorage.remove('admin_refresh_token')
-    } else {
-      secureStorage.remove('user_token')
-      secureStorage.remove('user_data')
-      secureStorage.remove('user_refresh_token')
-    }
+    // 清除所有角色的token和用户数据（彻底清除，避免冲突）
+    secureStorage.remove('admin_token')
+    secureStorage.remove('admin_user')
+    secureStorage.remove('admin_refresh_token')
+    secureStorage.remove('user_token')
+    secureStorage.remove('user_data')
+    secureStorage.remove('user_refresh_token')
     
-    // 清除通用的token和用户数据（可能被两个角色共享）
+    // 清除可能存在的通用存储（兼容旧版本）
     secureStorage.remove('token')
     secureStorage.remove('refresh_token')
     secureStorage.remove('user')
@@ -143,7 +191,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const refreshToken = async () => {
-    const refresh_token = secureStorage.get('refresh_token')
+    const isAdmin = isAdminPath()
+    const refreshTokenKey = isAdmin ? 'admin_refresh_token' : 'user_refresh_token'
+    const refresh_token = secureStorage.get(refreshTokenKey)
+    
     if (!refresh_token) {
       logout()
       return false
@@ -152,7 +203,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.post('/auth/refresh', { refresh_token }, { withCredentials: true })
       const { access_token } = response.data
       token.value = access_token
-      saveToken(access_token)
+      saveToken(access_token, isAdmin)
       return true
     } catch (error) {
       logout()
@@ -174,7 +225,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   const updateUser = (userData) => {
     user.value = { ...user.value, ...userData }
-    saveUser(user.value)
+    const isAdmin = user.value?.is_admin || false
+    saveUser(user.value, isAdmin)
   }
 
   const changePassword = async (oldPassword, newPassword) => {
@@ -195,12 +247,13 @@ export const useAuthStore = defineStore('auth', () => {
   const setAuth = (newToken, newUser, useSessionStorage = false) => {
     token.value = newToken
     user.value = newUser
+    const isAdmin = newUser?.is_admin || false
     if (useSessionStorage) {
+      // 用户登录：使用 sessionStorage
       secureStorage.set('user_token', newToken, true, TOKEN_TTL)
       secureStorage.set('user_data', newUser, true, TOKEN_TTL)
     } else {
-      secureStorage.set('token', newToken, false, TOKEN_TTL)
-      secureStorage.set('user', newUser, false, TOKEN_TTL)
+      // 管理员登录：使用 localStorage
       secureStorage.set('admin_token', newToken, false, TOKEN_TTL)
       secureStorage.set('admin_user', newUser, false, TOKEN_TTL)
     }
@@ -208,12 +261,14 @@ export const useAuthStore = defineStore('auth', () => {
 
   const setToken = (newToken) => {
     token.value = newToken
-    saveToken(newToken)
+    const isAdmin = isAdminPath()
+    saveToken(newToken, isAdmin)
   }
 
   const setUser = (newUser) => {
     user.value = newUser
-    saveUser(newUser)
+    const isAdmin = newUser?.is_admin || false
+    saveUser(newUser, isAdmin)
   }
 
   const getCurrentState = () => ({
@@ -232,6 +287,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     isAdmin,
     login,
+    adminLogin,
     register,
     logout,
     refreshToken,

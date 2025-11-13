@@ -421,7 +421,7 @@ const handleAdminCommand = (command) => {
       break
     case 'logout':
       authStore.logout()
-      router.push('/login')
+      router.push('/admin/login')
       break
   }
 }

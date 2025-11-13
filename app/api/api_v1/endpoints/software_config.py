@@ -27,7 +27,7 @@ class SoftwareConfigUpdate(BaseModel):
 
 @router.get("/", response_model=ResponseBase)
 def get_software_config(
-    current_user = Depends(get_current_user),
+    current_admin = Depends(get_current_admin_user),
     db: Session = Depends(get_db)
 ) -> Any:
     try:

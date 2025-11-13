@@ -165,12 +165,8 @@ export default {
           // 确保用户信息已经更新后再跳转
           await nextTick()
 
-          // 根据用户权限跳转到不同页面
-          if (authStore.isAdmin) {
-            await router.push('/admin/dashboard')
-          } else {
-            await router.push('/dashboard')
-          }
+          // 用户登录页面只跳转到用户仪表盘
+          await router.push('/dashboard')
         } else {
           ElMessage.error(result.message)
         }

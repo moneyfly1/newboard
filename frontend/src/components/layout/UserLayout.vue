@@ -187,19 +187,28 @@
       <nav class="sidebar-nav">
         <div class="nav-section">
           <div class="nav-section-title" v-show="!sidebarCollapsed">用户中心</div>
-          <router-link 
-            v-for="item in menuItems"
-            :key="item.path"
-            :to="item.path"
-            class="nav-item"
-            :class="{ 
-              active: $route.path === item.path,
-              'admin-back': item.isAdminBack
-            }"
-          >
-            <i :class="item.icon"></i>
-            <span class="nav-text" v-show="!sidebarCollapsed">{{ item.title }}</span>
-          </router-link>
+          <template v-for="item in menuItems" :key="item.path">
+            <router-link 
+              v-if="!item.isAdminBack"
+              :to="item.path"
+              class="nav-item"
+              :class="{ 
+                active: $route.path === item.path
+              }"
+            >
+              <i :class="item.icon"></i>
+              <span class="nav-text" v-show="!sidebarCollapsed">{{ item.title }}</span>
+            </router-link>
+            <div
+              v-else
+              class="nav-item admin-back"
+              @click="returnToAdmin"
+              style="cursor: pointer;"
+            >
+              <i :class="item.icon"></i>
+              <span class="nav-text" v-show="!sidebarCollapsed">{{ item.title }}</span>
+            </div>
+          </template>
         </div>
       </nav>
     </aside>
@@ -486,15 +495,18 @@ const returnToAdmin = () => {
         try {
           adminUserData = JSON.parse(adminUserData)
         } catch (e) {
-          // 如果解析失败，尝试从 localStorage 获取
-          const storedAdminUser = secureStorage.get('admin_user')
-          if (storedAdminUser) {
-            adminUserData = typeof storedAdminUser === 'string' ? JSON.parse(storedAdminUser) : storedAdminUser
-          }
+          ElMessage.error('管理员信息格式错误')
+          return
         }
       }
       
-      // 恢复管理员认证信息到 authStore
+      // 验证是否为管理员
+      if (!adminUserData.is_admin) {
+        ElMessage.error('该账户不是管理员')
+        return
+      }
+      
+      // 恢复管理员认证信息到 authStore（使用 localStorage）
       authStore.setAuth(adminToken, adminUserData, false)
       
       // 清除用户相关的 sessionStorage 信息
