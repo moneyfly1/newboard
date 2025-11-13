@@ -1484,44 +1484,49 @@ def update_order(
     try:
         if settings.DEBUG:
             logger.debug(f"更新订单 {order_id}，请求数据: {order_data}")
-        check_query = text("SELECT id, status FROM orders WHERE id = :order_id")
-        existing_order = db.execute(check_query, {"order_id": order_id}).first()
-        if not existing_order:
+        
+        # 使用ORM方式更新订单，确保数据正确保存到数据库
+        order_service = OrderService(db)
+        order = order_service.get(order_id)
+        if not order:
             logger.warning(f"订单 {order_id} 不存在")
             return ResponseBase(success=False, message="订单不存在")
+        
         if settings.DEBUG:
-            logger.debug(f"订单 {order_id} 当前状态: {existing_order.status}")
-        update_fields = []
-        update_values = {"order_id": order_id}
+            logger.debug(f"订单 {order_id} 当前状态: {order.status}")
+        
+        updated = False
+        
         if "status" in order_data:
-            update_fields.append("status = :status")
-            update_values["status"] = order_data["status"]
-            if settings.DEBUG:
-                logger.debug(f"准备更新订单状态为: {order_data['status']}")
+            order.status = order_data["status"]
+            updated = True
+            logger.info(f"更新订单 {order_id} 的状态为: {order_data['status']}")
+            
             if order_data["status"] == "paid":
-                update_fields.append("payment_time = :payment_time")
-                update_values["payment_time"] = datetime.now(timezone.utc)
-                if settings.DEBUG:
-                    logger.debug(f"设置支付时间: {update_values['payment_time']}")
+                order.payment_time = datetime.now(timezone.utc)
+                logger.info(f"设置订单 {order_id} 的支付时间: {order.payment_time}")
+        
         if "payment_status" in order_data:
-            update_fields.append("payment_status = :payment_status")
-            update_values["payment_status"] = order_data["payment_status"]
+            # 注意：Order模型可能没有payment_status字段，需要检查
+            if hasattr(order, 'payment_status'):
+                order.payment_status = order_data["payment_status"]
+                updated = True
+        
         if "admin_notes" in order_data:
-            update_fields.append("admin_notes = :admin_notes")
-            update_values["admin_notes"] = order_data["admin_notes"]
-        if update_fields:
-            update_fields.append("updated_at = :updated_at")
-            update_values["updated_at"] = datetime.now()
-            if settings.DEBUG:
-                logger.debug(f"执行SQL更新: {update_query}")
-                logger.debug(f"更新值: {update_values}")
-            result = db.execute(update_query, update_values)
+            if hasattr(order, 'admin_notes'):
+                order.admin_notes = order_data["admin_notes"]
+                updated = True
+        
+        if updated:
+            order.updated_at = datetime.now(timezone.utc)
             db.commit()
-            logger.info(f"订单 {order_id} 数据库更新成功，影响行数: {result.rowcount}")
+            db.refresh(order)
+            logger.info(f"订单 {order_id} 更新成功，已提交到数据库")
+            
+            # 如果订单状态更新为已支付，处理订阅
             if "status" in order_data and order_data["status"] == "paid":
                 db.expire_all()
-                order_service = OrderService(db)
-                order = order_service.get(order_id)
+                order = order_service.get(order_id)  # 重新获取订单以确保数据最新
                 if order:
                     try:
                         subscription_service = SubscriptionService(db)
@@ -1530,11 +1535,13 @@ def update_order(
                             logger.warning(f"订单 {order_id} 状态已更新为已支付，但处理订阅时出错")
                     except Exception as e:
                         logger.warning(f"处理订阅时发生异常: {e}", exc_info=True)
+            
             return ResponseBase(message="订单更新成功")
         else:
             return ResponseBase(message="没有需要更新的字段")
     except Exception as e:
         db.rollback()
+        logger.error(f"更新订单 {order_id} 失败: {str(e)}", exc_info=True)
         return ResponseBase(success=False, message=f"更新订单失败: {str(e)}")
 @router.delete("/orders/{order_id}", response_model=ResponseBase)
 def delete_order(
