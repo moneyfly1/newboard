@@ -1178,6 +1178,10 @@ export default {
           device_limit: subscription.device_limit
         })
         ElMessage.success('设备限制更新成功')
+        // 触发自定义事件，通知用户列表刷新
+        window.dispatchEvent(new CustomEvent('subscription-device-limit-updated', {
+          detail: { subscriptionId: subscription.id, deviceLimit: subscription.device_limit }
+        }))
         // 不重新加载整个列表，只更新当前项
         // loadSubscriptions()
       } catch (error) {

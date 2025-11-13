@@ -58,6 +58,9 @@
                 <el-dropdown-item command="active">活跃</el-dropdown-item>
                 <el-dropdown-item command="inactive">待激活</el-dropdown-item>
                 <el-dropdown-item command="disabled">禁用</el-dropdown-item>
+                <el-dropdown-item command="device_overlimit" divided>
+                  <span style="color: #f56c6c; font-weight: bold;">⚠️ 设备超限</span>
+                </el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -231,11 +234,19 @@
         <el-table-column label="设备信息" width="120" align="center">
           <template #default="scope">
             <div class="device-info">
-              <div class="device-stats">
+              <div 
+                class="device-stats" 
+                :class="{ 'device-overlimit-alert': isDeviceOverlimit(scope.row) }"
+              >
                 <el-tooltip content="已订阅设备数量" placement="top">
                   <div class="device-item online">
                     <el-icon class="device-icon online-icon"><Monitor /></el-icon>
-                    <span class="device-count">{{ scope.row.online_devices || 0 }}</span>
+                    <span 
+                      class="device-count"
+                      :class="{ 'device-overlimit-count': isDeviceOverlimit(scope.row) }"
+                    >
+                      {{ scope.row.online_devices || 0 }}
+                    </span>
                   </div>
                 </el-tooltip>
                 <div class="device-separator">/</div>
@@ -848,6 +859,13 @@ export default {
       ]
     }
 
+    // 判断设备是否超限
+    const isDeviceOverlimit = (user) => {
+      const onlineDevices = user.online_devices || 0
+      const deviceLimit = user.subscription?.device_limit || 0
+      return deviceLimit > 0 && onlineDevices >= deviceLimit
+    }
+
     const loadUsers = async () => {
       loading.value = true
       try {
@@ -864,8 +882,15 @@ export default {
         // 检查响应是否成功
         if (response.data && response.data.success && response.data.data) {
           const responseData = response.data.data
-          users.value = responseData.users || []
-          total.value = responseData.total || 0
+          let userList = responseData.users || []
+          
+          // 如果筛选设备超限用户，进行前端筛选
+          if (searchForm.status === 'device_overlimit') {
+            userList = userList.filter(user => isDeviceOverlimit(user))
+          }
+          
+          users.value = userList
+          total.value = searchForm.status === 'device_overlimit' ? userList.length : (responseData.total || 0)
         } else {
           users.value = []
           total.value = 0
@@ -912,7 +937,8 @@ export default {
         '': '状态筛选',
         'active': '活跃',
         'inactive': '待激活',
-        'disabled': '禁用'
+        'disabled': '禁用',
+        'device_overlimit': '⚠️ 设备超限'
       }
       return statusMap[searchForm.status] || '状态筛选'
     }
@@ -1288,6 +1314,8 @@ export default {
     onMounted(() => {
       loadUsers()
       window.addEventListener('resize', handleResize)
+      // 监听订阅管理更新设备限制的事件
+      window.addEventListener('subscription-device-limit-updated', loadUsers)
     })
 
     onUnmounted(() => {
@@ -1336,7 +1364,8 @@ export default {
       getSubscriptionStatusText,
       handleSelectionChange,
       clearSelection,
-      batchDeleteUsers
+      batchDeleteUsers,
+      isDeviceOverlimit
     }
   }
 }
@@ -1773,6 +1802,33 @@ export default {
   font-size: 14px;
   color: #c0c4cc;
   font-weight: bold;
+}
+
+/* 设备超限警报样式 */
+.device-overlimit-alert {
+  background: #fef0f0 !important;
+  border: 2px solid #f56c6c !important;
+  border-radius: 6px;
+  animation: device-overlimit-flash 1.5s infinite;
+  box-shadow: 0 0 10px rgba(245, 108, 108, 0.3);
+}
+
+.device-overlimit-count {
+  color: #f56c6c !important;
+  font-weight: bold !important;
+  font-size: 16px !important;
+  animation: device-overlimit-flash 1.5s infinite;
+}
+
+@keyframes device-overlimit-flash {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
 }
 
 .device-limit {
