@@ -57,7 +57,10 @@ api.interceptors.request.use(
       '/payment-config',  // 支付配置（管理员功能）
       '/software-config',  // 软件配置（管理员功能）
       '/config/admin',  // 配置管理
-      '/notifications/admin'  // 通知管理
+      '/notifications/admin',  // 通知管理
+      '/tickets/admin',  // 工单管理（管理员）
+      '/coupons/admin',  // 优惠券管理（管理员）
+      '/announcements/admin'  // 公告管理（管理员）
     ]
     const isAdminAPI = config.url && (
       config.url.startsWith('/admin') || 
@@ -522,6 +525,7 @@ export const ticketAPI = {
   createTicket: (data) => api.post('/tickets/', data),
   getUserTickets: (params) => api.get('/tickets/', { params }),
   getTicket: (ticketId) => api.get(`/tickets/${ticketId}`),
+  getAdminTicket: (ticketId) => api.get(`/tickets/admin/${ticketId}`),  // 管理员专用
   addReply: (ticketId, data) => api.post(`/tickets/${ticketId}/replies`, data),
   addRating: (ticketId, data) => api.post(`/tickets/${ticketId}/rating`, data),
   getAllTickets: (params) => api.get('/tickets/admin/all', { params }),

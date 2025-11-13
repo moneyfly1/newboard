@@ -183,6 +183,57 @@ def add_ticket_rating(
         raise HTTPException(status_code=400, detail="添加评价失败")
     return ResponseBase(message="评价添加成功")
 
+@router.get("/admin/{ticket_id}", response_model=ResponseBase)
+@handle_api_error("获取工单详情（管理员）")
+def get_admin_ticket(
+    ticket_id: int,
+    current_admin = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    ticket_service = TicketService(db)
+    ticket = ticket_service.get(ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="工单不存在")
+    return ResponseBase(
+        data={
+            "id": ticket.id,
+            "ticket_no": ticket.ticket_no,
+            "title": ticket.title,
+            "content": ticket.content,
+            "type": ticket.type.value,
+            "status": ticket.status.value,
+            "priority": ticket.priority.value,
+            "user_id": ticket.user_id,
+            "assigned_to": ticket.assigned_to,
+            "admin_notes": ticket.admin_notes,
+            "rating": ticket.rating,
+            "rating_comment": ticket.rating_comment,
+            "created_at": ticket.created_at.isoformat(),
+            "updated_at": ticket.updated_at.isoformat() if ticket.updated_at else None,
+            "resolved_at": ticket.resolved_at.isoformat() if ticket.resolved_at else None,
+            "replies": [
+                {
+                    "id": r.id,
+                    "content": r.content,
+                    "is_admin": r.is_admin == "true",
+                    "user_id": r.user_id,
+                    "created_at": r.created_at.isoformat()
+                }
+                for r in ticket.replies
+            ],
+            "attachments": [
+                {
+                    "id": a.id,
+                    "file_name": a.file_name,
+                    "file_path": a.file_path,
+                    "file_size": a.file_size,
+                    "created_at": a.created_at.isoformat()
+                }
+                for a in ticket.attachments
+            ]
+        }
+    )
+
 @router.get("/admin/all", response_model=ResponseBase)
 @handle_api_error("获取所有工单")
 def get_all_tickets(

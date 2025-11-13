@@ -159,6 +159,33 @@ def broadcast_notification(
         data={"sent_count": created_count, "email_sent_count": email_sent_count if send_email else 0}
     )
 
+@router.put("/admin/notifications/{notification_id}", response_model=ResponseBase)
+def update_notification(
+    notification_id: int,
+    notification_data: dict,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin_user)
+) -> Any:
+    notification_service = NotificationCRUDService(db)
+    # 获取现有通知
+    notification = notification_service.get(notification_id)
+    if not notification:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="通知不存在")
+    
+    # 更新通知字段
+    if "title" in notification_data:
+        notification.title = notification_data["title"]
+    if "content" in notification_data:
+        notification.content = notification_data["content"]
+    if "type" in notification_data:
+        notification.type = notification_data["type"]
+    if "is_read" in notification_data:
+        notification.is_read = notification_data["is_read"]
+    
+    db.commit()
+    db.refresh(notification)
+    return ResponseBase(message="通知更新成功", data={"notification": _serialize_notification(notification)})
+
 @router.delete("/admin/notifications/{notification_id}", response_model=ResponseBase)
 def delete_notification(
     notification_id: int,

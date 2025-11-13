@@ -504,7 +504,7 @@ const loadStatistics = async () => {
 const viewTicket = async (ticketId) => {
   try {
     // 使用管理端API获取工单详情（需要管理员权限）
-    const response = await ticketAPI.getTicket(ticketId)
+    const response = await ticketAPI.getAdminTicket(ticketId)
     if (response.data.success) {
       currentTicket.value = response.data.data
       showDetailDialog.value = true
