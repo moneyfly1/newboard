@@ -252,11 +252,13 @@ def get_users(
             subscribed_devices = 0
             if subscription:
                 try:
-                    result = db.execute(device_query, {
+                    # 使用与订阅列表相同的逻辑获取在线设备数量
+                    device_result = db.execute(device_query, {
                         'subscription_id': subscription.id
                     }).fetchone()
-                    if result:
-                        subscribed_devices = result.subscribed_count or 0
+                    if device_result:
+                        # device_query 返回 total_count，与订阅列表API保持一致
+                        subscribed_devices = device_result.total_count or 0
                     else:
                         subscribed_devices = 0
                 except Exception as e:
