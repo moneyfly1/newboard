@@ -5,6 +5,7 @@
 ## 📋 目录
 
 - [系统要求](#系统要求)
+- [访问地址说明](#访问地址说明)
 - [方式一：使用安装脚本（推荐）](#方式一使用安装脚本推荐)
 - [方式二：手动安装](#方式二手动安装)
 - [支付配置](#支付配置)
@@ -15,6 +16,34 @@
 - [常见问题](#常见问题)
 - [维护和管理](#维护和管理)
 - [安全建议](#安全建议)
+
+---
+
+## 访问地址说明
+
+### 用户端地址
+
+- **用户登录页面**：`https://YOUR_DOMAIN/login`
+- **用户仪表盘**：`https://YOUR_DOMAIN/dashboard`
+- **用户注册页面**：`https://YOUR_DOMAIN/register`
+
+### 管理员后台地址
+
+- **管理员登录页面**：`https://YOUR_DOMAIN/admin/login` ⭐
+- **管理员仪表盘**：`https://YOUR_DOMAIN/admin/dashboard`
+
+**重要提示**：
+- ⚠️ **管理员必须使用专用的管理员登录页面**：`/admin/login`
+- ⚠️ **普通用户使用用户登录页面**：`/login`
+- ✅ 系统已完全分离管理员和用户的登录流程，避免冲突
+- ✅ 管理员登录后使用 `localStorage` 存储token（持久化）
+- ✅ 普通用户登录后使用 `sessionStorage` 存储token（会话级）
+
+### API 地址
+
+- **API 基础地址**：`https://YOUR_DOMAIN/api/v1`
+- **API 文档**：`https://YOUR_DOMAIN/docs`（Swagger UI）
+- **健康检查**：`https://YOUR_DOMAIN/api/health`
 
 ---
 
