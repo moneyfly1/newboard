@@ -1,0 +1,156 @@
+# ================================
+# XBoard Modern .gitignore (Modified for full backup)
+# ================================
+
+# 排除old文件夹
+old/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment - 注释掉以允许推送
+# venv/
+# env/
+# ENV/
+# env.bak/
+# venv.bak/
+
+# Environment Variables - 注释掉以允许推送
+# .env
+# .env.local
+# .env.development.local
+# .env.test.local
+# .env.production.local
+
+# Database - 注释掉以允许推送
+# *.db
+# *.sqlite
+# *.sqlite3
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Frontend build
+frontend/dist/
+frontend/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Development files
+start_dev.sh
+stop_dev.sh
+check_*.py
+disable_*.py
+stop_*.py
+deploy.sh
+*.code-workspace
+
+# Uploads - 注释掉以允许推送
+# uploads/
+# static/uploads/
+
+# Cache
+.cache/
+.parcel-cache/
+
+# Coverage
+coverage/
+.coverage
+htmlcov/
+
+# Test
+.pytest_cache/
+.tox/
+test_*.py
+*_test.py
+tests/
+test-*.html
+test-*.js
+test-*.css
+
+# Docker
+.dockerignore
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Config files with sensitive data
+config.local.py
+settings.local.py
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+
+# Redis dump
+dump.rdb
+
+# System files
+*.pid
+*.seed
+*.pid.lock
+
+# Unused files
+*.yaml
+*.yml
+*.php
+*.html
+*.sql
+*.bat
+*.sh
+install.sh
+setup_*.sh
+setup_*.bat

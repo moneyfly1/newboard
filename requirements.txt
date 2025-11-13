@@ -1,0 +1,43 @@
+# 基础依赖
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.23
+alembic==1.12.1
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+pyotp==2.9.0
+qrcode[pil]==7.4.2
+python-dotenv==1.0.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# 数据库驱动
+pymysql==1.1.2
+psycopg2-binary==2.9.10
+aiosqlite==0.21.0
+
+# 邮件和模板相关
+jinja2==3.1.2
+email-validator==2.1.0
+
+# 异步和队列支持
+celery==5.3.4
+redis==6.4.0
+
+# 工具库
+httpx==0.25.2
+watchfiles==0.21.0
+websockets==12.0
+user-agents==2.2.0
+requests==2.31.0
+psutil==5.9.6
+schedule==1.2.0  # 定时任务调度
+pycryptodome==3.19.0  # 支付宝签名和加密支持
+
+# 开发和测试
+pytest==7.4.3
+black==23.11.0
+flake8==6.1.0
+isort==5.12.0
