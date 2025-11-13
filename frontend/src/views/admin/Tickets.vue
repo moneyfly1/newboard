@@ -11,24 +11,25 @@
     </div>
 
     <!-- 移动端筛选栏 -->
-    <div class="mobile-filter-bar" v-if="isMobile">
+    <div class="mobile-action-bar" v-if="isMobile">
       <div class="mobile-search-section">
-        <el-input
-          v-model="filters.keyword"
-          placeholder="搜索工单编号、标题或内容"
-          class="mobile-search-input"
-          clearable
-          @keyup.enter="loadTickets"
-        >
-          <template #prefix>
+        <div class="search-input-wrapper">
+          <el-input
+            v-model="filters.keyword"
+            placeholder="搜索工单编号、标题或内容"
+            class="mobile-search-input"
+            clearable
+            @keyup.enter="loadTickets"
+          />
+          <el-button 
+            @click="loadTickets" 
+            class="search-button-inside"
+            type="default"
+            plain
+          >
             <el-icon><Search /></el-icon>
-          </template>
-          <template #append>
-            <el-button @click="loadTickets" type="primary" size="small">
-              <el-icon><Search /></el-icon>
-            </el-button>
-          </template>
-        </el-input>
+          </el-button>
+        </div>
       </div>
       <div class="mobile-filter-buttons">
         <el-button
@@ -954,26 +955,8 @@ onUnmounted(() => {
     }
   }
 
-  .mobile-filter-bar {
-    margin-bottom: 16px;
-    
-    .mobile-search-section {
-      margin-bottom: 12px;
-      
-      .mobile-search-input {
-        width: 100%;
-      }
-    }
-    
-    .mobile-filter-buttons {
-      display: flex;
-      gap: 8px;
-      
-      .el-button {
-        flex: 1;
-      }
-    }
-  }
+  // mobile-action-bar 样式已统一在 list-common.scss 中定义
+  // 这里不再重复定义，使用统一样式
 
   .filter-bar.desktop-only {
     display: none;
@@ -1135,7 +1118,7 @@ onUnmounted(() => {
 
 /* 移动端隐藏桌面端元素 */
 @media (min-width: 769px) {
-  .mobile-filter-bar,
+  .mobile-action-bar,
   .mobile-tickets-list {
     display: none !important;
   }

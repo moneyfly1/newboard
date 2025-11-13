@@ -33,6 +33,10 @@ const handleLogout = () => {
 api.interceptors.request.use(
   config => {
     // 由于 baseURL 是 '/api/v1'，config.url 不包含 baseURL 前缀
+    // 获取当前路径，用于判断是否在管理员后台
+    const currentPath = typeof window !== 'undefined' ? window.location.pathname : ''
+    const isInAdminPanel = currentPath.startsWith('/admin')
+    
     // 定义公开API列表（不需要认证的API）
     const publicAPIs = [
       '/settings/public-settings',  // 公开设置（不需要认证）
@@ -52,6 +56,7 @@ api.interceptors.request.use(
     // 1. 路径以 '/admin' 开头
     // 2. 路径中包含 '/admin/'
     // 3. 特定的管理员API路径（即使不在 /admin 下）
+    // 4. 如果在管理员后台（/admin路径下），则所有API都使用admin_token（包括/users/开头的API）
     const adminPaths = [
       '/admin',
       '/payment-config',  // 支付配置（管理员功能）
@@ -65,7 +70,8 @@ api.interceptors.request.use(
     const isAdminAPI = config.url && (
       config.url.startsWith('/admin') || 
       config.url.includes('/admin/') ||
-      adminPaths.some(path => config.url.startsWith(path))
+      adminPaths.some(path => config.url.startsWith(path)) ||
+      (isInAdminPanel && config.url.startsWith('/users/'))  // 在管理员后台时，/users/开头的API也使用admin_token
     )
     
     // 如果是公开API，不需要token，直接返回
@@ -158,18 +164,27 @@ api.interceptors.response.use(
     }
     if (error.response?.status === 401) {
       // 由于 baseURL 是 '/api/v1'，config.url 不包含 baseURL 前缀
+      // 获取当前路径，用于判断是否在管理员后台
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : ''
+      const isInAdminPanel = currentPath.startsWith('/admin')
+      
       // 判断是否为管理员API：路径以 '/admin' 开头，或者路径中包含 '/admin/'，或者特定的管理员API路径
+      // 如果在管理员后台，/users/开头的API也使用admin_token
       const adminPaths = [
         '/admin',
         '/payment-config',
         '/software-config',
         '/config/admin',
-        '/notifications/admin'
+        '/notifications/admin',
+        '/tickets/admin',
+        '/coupons/admin',
+        '/announcements/admin'
       ]
       const isAdminAPI = error.config?.url && (
         error.config.url.startsWith('/admin') || 
         error.config.url.includes('/admin/') ||
-        adminPaths.some(path => error.config.url.startsWith(path))
+        adminPaths.some(path => error.config.url.startsWith(path)) ||
+        (isInAdminPanel && error.config.url.startsWith('/users/'))  // 在管理员后台时，/users/开头的API也使用admin_token
       )
       const refreshKey = isAdminAPI ? 'admin' : 'user'
 

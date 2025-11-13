@@ -37,32 +37,41 @@
           </el-form-item>
         </el-form>
       </div>
-      <div class="mobile-search-section">
-        <el-input
-          v-model="searchForm.name"
-          placeholder="搜索套餐名称"
-          clearable
-          class="mobile-search-input"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <el-select 
-          v-model="searchForm.status" 
-          placeholder="选择状态" 
-          clearable
-          class="mobile-status-select"
-        >
-          <el-option label="启用" value="active" />
-          <el-option label="禁用" value="inactive" />
-        </el-select>
-        <div class="mobile-search-buttons">
-          <el-button type="primary" @click="handleSearch" class="mobile-action-btn">
-            <el-icon><Search /></el-icon>
-            搜索
-          </el-button>
-          <el-button @click="resetSearch" class="mobile-action-btn">
+      <div class="mobile-action-bar">
+        <div class="mobile-search-section">
+          <div class="search-input-wrapper">
+            <el-input
+              v-model="searchForm.name"
+              placeholder="搜索套餐名称"
+              clearable
+              class="mobile-search-input"
+              @keyup.enter="handleSearch"
+            />
+            <el-button 
+              @click="handleSearch" 
+              class="search-button-inside"
+              type="default"
+              plain
+            >
+              <el-icon><Search /></el-icon>
+            </el-button>
+          </div>
+        </div>
+        <div class="mobile-filter-buttons">
+          <el-select 
+            v-model="searchForm.status" 
+            placeholder="选择状态" 
+            clearable
+            class="mobile-status-select"
+          >
+            <el-option label="启用" value="active" />
+            <el-option label="禁用" value="inactive" />
+          </el-select>
+          <el-button 
+            @click="resetSearch" 
+            type="default"
+            plain
+          >
             <el-icon><Refresh /></el-icon>
             重置
           </el-button>
@@ -603,32 +612,8 @@ export default {
     display: none;
   }
   
-  .mobile-search-section {
-    margin-bottom: 16px;
-    padding: 16px;
-    background: #f8f9fa;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    
-    .mobile-search-input,
-    .mobile-status-select {
-      width: 100%;
-    }
-    
-    .mobile-search-buttons {
-      display: flex;
-      gap: 8px;
-      width: 100%;
-      
-      .mobile-action-btn {
-        flex: 1;
-        height: 44px;
-        font-size: 16px;
-      }
-    }
-  }
+  // mobile-action-bar 和 mobile-search-section 样式已统一在 list-common.scss 中定义
+  // 这里不再重复定义，使用统一样式
   
   .mobile-card-list {
     margin-top: 16px;
@@ -725,6 +710,7 @@ export default {
 }
 
 /* 移除所有输入框的圆角和阴影效果，设置为简单长方形 */
+/* 但保留手机端搜索框的样式 */
 :deep(.el-input__wrapper) {
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -732,12 +718,8 @@ export default {
   background-color: #ffffff !important;
 }
 
-:deep(.el-select .el-input__wrapper) {
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  border: 1px solid #dcdfe6 !important;
-  background-color: #ffffff !important;
-}
+// mobile-action-bar 样式已统一在 list-common.scss 中定义
+// 这里不再重复定义，使用统一样式
 
 :deep(.el-input__inner) {
   border-radius: 0 !important;

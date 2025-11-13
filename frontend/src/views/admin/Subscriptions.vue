@@ -52,22 +52,23 @@
       <div class="mobile-action-bar">
         <!-- 搜索栏（移动端优先显示） -->
         <div class="mobile-search-section">
-          <el-input
-            v-model="searchForm.keyword"
-            placeholder="输入QQ或订阅地址查询"
-            class="mobile-search-input"
-            clearable
-            @keyup.enter="searchSubscriptions"
-          >
-            <template #prefix>
+          <div class="search-input-wrapper">
+            <el-input
+              v-model="searchForm.keyword"
+              placeholder="输入QQ或订阅地址查询"
+              class="mobile-search-input"
+              clearable
+              @keyup.enter="searchSubscriptions"
+            />
+            <el-button 
+              @click="searchSubscriptions" 
+              class="search-button-inside"
+              type="default"
+              plain
+            >
               <el-icon><Search /></el-icon>
-            </template>
-            <template #append>
-              <el-button type="primary" @click="searchSubscriptions">
-                <el-icon><Search /></el-icon>
-              </el-button>
-            </template>
-          </el-input>
+            </el-button>
+          </div>
         </div>
 
         <!-- 快速操作按钮组 -->
@@ -2029,29 +2030,9 @@ export default {
 }
 
 // 移动端智能操作栏
+// mobile-action-bar 和 mobile-search-section 样式已统一在 list-common.scss 中定义
+// 这里不再重复定义，使用统一样式
 .mobile-action-bar {
-  display: none;
-  
-  @media (max-width: 768px) {
-    display: block;
-    margin-bottom: 16px;
-    padding: 12px;
-    background: #f8f9fa;
-    border-radius: 8px;
-  }
-  
-  .mobile-search-section {
-    margin-bottom: 12px;
-    
-    .mobile-search-input {
-      width: 100%;
-      
-      :deep(.el-input__wrapper) {
-        border-radius: 8px;
-      }
-    }
-  }
-  
   .mobile-quick-actions {
     display: flex;
     flex-direction: column;

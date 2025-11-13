@@ -34,7 +34,53 @@
         </el-card>
       </el-col>
     </el-row>
-    <el-card class="filter-section">
+    
+    <!-- 移动端搜索和筛选栏 -->
+    <div class="mobile-action-bar">
+      <div class="mobile-search-section">
+        <div class="search-input-wrapper">
+          <el-input
+            v-model="filterForm.email"
+            placeholder="搜索邮箱地址"
+            class="mobile-search-input"
+            clearable
+            @keyup.enter="applyFilter"
+          />
+          <el-button 
+            @click="applyFilter" 
+            class="search-button-inside"
+            type="default"
+            plain
+          >
+            <el-icon><Search /></el-icon>
+          </el-button>
+        </div>
+      </div>
+      <div class="mobile-filter-buttons">
+        <el-select 
+          v-model="filterForm.status" 
+          placeholder="选择状态" 
+          clearable
+          class="mobile-status-select"
+        >
+          <el-option label="待发送" value="pending" />
+          <el-option label="发送中" value="sending" />
+          <el-option label="已发送" value="sent" />
+          <el-option label="发送失败" value="failed" />
+          <el-option label="已取消" value="cancelled" />
+        </el-select>
+        <el-button 
+          @click="resetFilter" 
+          type="default"
+          plain
+        >
+          <el-icon><Refresh /></el-icon>
+          重置
+        </el-button>
+      </div>
+    </div>
+    
+    <el-card class="filter-section desktop-only">
       <el-form :inline="true" :model="filterForm" class="filter-form">
         <el-form-item label="状态">
           <el-select v-model="filterForm.status" placeholder="选择状态" clearable style="width: 180px">
@@ -1071,7 +1117,8 @@ export default {
   }
   
   /* 统一所有移动端按钮样式 */
-  .el-button {
+  /* 但排除 mobile-action-bar 中的按钮，它们使用统一样式 */
+  .email-queue-admin .el-button:not(.search-button-inside) {
     width: 100% !important;
     min-width: 100% !important;
     max-width: 100% !important;
@@ -1087,6 +1134,9 @@ export default {
       font-size: 16px;
     }
   }
+  
+  // mobile-action-bar 样式已统一在 list-common.scss 中定义
+  // 这里不再重复定义，使用统一样式
   
   /* 操作按钮组 */
   .action-buttons {

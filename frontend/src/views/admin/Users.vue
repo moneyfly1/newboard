@@ -25,18 +25,14 @@
               class="mobile-search-input"
               clearable
               @keyup.enter="searchUsers"
-            >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
+            />
             <el-button 
-              type="primary" 
-              @click="searchUsers"
-              class="search-btn"
-              :icon="Search"
+              @click="searchUsers" 
+              class="search-button-inside"
+              type="default"
+              plain
             >
-              搜索
+              <el-icon><Search /></el-icon>
             </el-button>
           </div>
         </div>
@@ -1446,49 +1442,192 @@ export default {
   }
 }
 
-// 移动端筛选按钮组
-.mobile-filter-buttons {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
-  
-  .el-button {
-    flex: 1;
-    min-width: 120px; // 增加最小宽度，让按钮更宽
-    font-size: 0.9rem;
-    padding: 10px 16px; // 增加左右内边距
-    min-height: 44px;
-    white-space: nowrap;
-    background: rgba(255, 255, 255, 0.95);
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    color: #667eea;
-    font-weight: 600;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-    transition: all 0.2s ease;
+// mobile-filter-buttons 样式已统一在 list-common.scss 中定义
+// 但为了确保与订单管理页面一致，这里添加相同的样式定义
+@media (max-width: 768px) {
+  .mobile-action-bar {
+    padding: 16px !important;
+    box-sizing: border-box !important;
     
-    @media (max-width: 480px) {
-      min-width: 100px;
-      padding: 8px 14px;
+    .mobile-search-section {
+      margin-bottom: 12px !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      
+      .search-input-wrapper {
+        position: relative !important;
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        
+        .mobile-search-input {
+          flex: 1 !important;
+          width: 100% !important;
+          box-sizing: border-box !important;
+          min-width: 0 !important;
+          
+          :deep(.el-input__wrapper) {
+            border-radius: 10px !important;
+            padding-left: 14px !important;
+            padding-right: 60px !important; // 为搜索按钮留出空间
+            background: rgba(255, 255, 255, 0.98) !important;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12) !important;
+            border: 2px solid rgba(255, 255, 255, 0.4) !important;
+            min-height: 48px !important;
+            
+            &:hover {
+              background: #ffffff !important;
+              border-color: rgba(255, 255, 255, 0.6) !important;
+              box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
+            }
+            
+            &.is-focus {
+              background: #ffffff !important;
+              border-color: #ffffff !important;
+              box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25) !important;
+            }
+          }
+          
+          :deep(.el-input__inner) {
+            color: #1e293b !important;
+            font-size: 0.95rem !important;
+            font-weight: 500 !important;
+            
+            &::placeholder {
+              color: #94a3b8 !important;
+              font-weight: 400 !important;
+            }
+          }
+        }
+        
+        .search-button-inside {
+          position: absolute !important;
+          right: 4px !important;
+          top: 50% !important;
+          transform: translateY(-50%) !important;
+          background: rgba(255, 255, 255, 0.98) !important;
+          border: 2px solid rgba(255, 255, 255, 0.4) !important;
+          color: #667eea !important;
+          border-radius: 8px !important;
+          font-weight: 600 !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1) !important;
+          padding: 0 !important;
+          height: 40px !important;
+          width: 40px !important;
+          min-width: 40px !important;
+          max-width: 40px !important;
+          transition: all 0.2s ease !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          box-sizing: border-box !important;
+          z-index: 10 !important;
+          
+          &:hover {
+            background: #ffffff !important;
+            border-color: #ffffff !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+            color: #5568d3 !important;
+          }
+          
+          &:active {
+            transform: translateY(-50%) scale(0.96) !important;
+          }
+          
+          .el-icon {
+            font-size: 18px !important;
+            margin: 0 !important;
+          }
+        }
+      }
     }
     
-    &:active {
-      transform: scale(0.96);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-    }
-    
-    &:hover,
-    &.is-active {
-      background: #ffffff;
-      border-color: #ffffff;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-    
-    :deep(.el-icon) {
-      margin-right: 6px;
-      font-size: 16px;
+    .mobile-filter-buttons {
+      display: flex !important;
+      flex-direction: row !important;
+      gap: 10px !important;
+      align-items: stretch !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+      flex-wrap: nowrap !important;
+      
+      .el-dropdown {
+        flex: 1 !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
+        
+        .el-button {
+          width: 100% !important;
+          background: rgba(255, 255, 255, 0.98) !important;
+          border: 2px solid rgba(255, 255, 255, 0.4) !important;
+          color: #667eea !important;
+          font-weight: 600 !important;
+          border-radius: 10px !important;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1) !important;
+          padding: 10px 12px !important;
+          min-height: 44px !important;
+          height: 44px !important;
+          transition: all 0.2s ease !important;
+          box-sizing: border-box !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          
+          &:hover {
+            background: #ffffff !important;
+            border-color: #ffffff !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+          }
+          
+          &.el-button--primary {
+            background: rgba(255, 255, 255, 0.98) !important;
+            border-color: rgba(255, 255, 255, 0.6) !important;
+            color: #667eea !important;
+          }
+          
+          .el-icon {
+            margin-right: 6px;
+            font-size: 16px;
+            flex-shrink: 0;
+          }
+        }
+      }
+      
+      .el-button {
+        flex: 1 !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        background: rgba(255, 255, 255, 0.98) !important;
+        border: 2px solid rgba(255, 255, 255, 0.4) !important;
+        color: #667eea !important;
+        font-weight: 600 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1) !important;
+        padding: 10px 12px !important;
+        min-height: 44px !important;
+        height: 44px !important;
+        transition: all 0.2s ease !important;
+        box-sizing: border-box !important;
+        white-space: nowrap !important;
+        
+        &:hover {
+          background: #ffffff !important;
+          border-color: #ffffff !important;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+        }
+        
+        &:active {
+          transform: scale(0.96) !important;
+        }
+        
+        .el-icon {
+          margin-right: 6px;
+          font-size: 16px;
+          flex-shrink: 0;
+        }
+      }
     }
   }
 }
@@ -1623,68 +1762,9 @@ export default {
   }
 }
 
-// 确保移动端所有元素右侧对齐
+// mobile-action-bar 样式已统一在 list-common.scss 中定义
+// 这里不再重复定义，使用统一样式
 .mobile-action-bar {
-  width: 100%;
-  box-sizing: border-box;
-  
-  .mobile-search-section {
-    width: 100%;
-    box-sizing: border-box;
-    
-    .search-input-wrapper {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      width: 100%;
-      
-      .mobile-search-input {
-        width: 100%;
-        
-        :deep(.el-input) {
-          width: 100% !important;
-        }
-        
-        :deep(.el-input__wrapper) {
-          border-radius: 4px;
-          width: 100% !important;
-        }
-      }
-      
-      .search-btn {
-        width: 100%;
-        padding: 0 16px;
-        border-radius: 4px;
-        font-size: 14px;
-        height: 40px;
-        
-        @media (max-width: 480px) {
-          height: 36px;
-          font-size: 13px;
-        }
-      }
-    }
-  }
-  
-  .mobile-filter-buttons {
-    width: 100%;
-    box-sizing: border-box;
-    
-    // 确保下拉菜单按钮也使用相同的宽度
-    :deep(.el-dropdown) {
-      flex: 1;
-      min-width: 120px;
-      
-      @media (max-width: 480px) {
-        min-width: 100px;
-      }
-      
-      .el-button {
-        width: 100%;
-      }
-    }
-  }
-  
   .mobile-date-picker-section {
     width: 100%;
     box-sizing: border-box;

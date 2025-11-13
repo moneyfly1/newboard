@@ -183,6 +183,61 @@ def add_ticket_rating(
         raise HTTPException(status_code=400, detail="添加评价失败")
     return ResponseBase(message="评价添加成功")
 
+# 管理员路由 - 必须把具体路径放在参数路径之前，否则会路由冲突
+@router.get("/admin/all", response_model=ResponseBase)
+@handle_api_error("获取所有工单")
+def get_all_tickets(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    type: Optional[str] = Query(None),
+    priority: Optional[str] = Query(None),
+    assigned_to: Optional[int] = Query(None),
+    keyword: Optional[str] = Query(None),
+    current_admin = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    ticket_service = TicketService(db)
+    skip = (page - 1) * size
+    tickets, total = ticket_service.get_all_tickets(
+        skip, size, _parse_ticket_status(status), _parse_ticket_type(type),
+        _parse_ticket_priority(priority), assigned_to, keyword
+    )
+    return ResponseBase(
+        data={
+            "tickets": [
+                {
+                    "id": t.id,
+                    "ticket_no": t.ticket_no,
+                    "title": t.title,
+                    "type": t.type.value,
+                    "status": t.status.value,
+                    "priority": t.priority.value,
+                    "user_id": t.user_id,
+                    "assigned_to": t.assigned_to,
+                    "created_at": t.created_at.isoformat(),
+                    "updated_at": t.updated_at.isoformat() if t.updated_at else None,
+                    "replies_count": len(t.replies) if t.replies else 0
+                }
+                for t in tickets
+            ],
+            "total": total,
+            "page": page,
+            "size": size,
+            "pages": (total + size - 1) // size
+        }
+    )
+
+@router.get("/admin/statistics", response_model=ResponseBase)
+@handle_api_error("获取工单统计")
+def get_ticket_statistics(
+    current_admin = Depends(get_current_admin_user),
+    db: Session = Depends(get_db)
+) -> Any:
+    ticket_service = TicketService(db)
+    stats = ticket_service.get_statistics()
+    return ResponseBase(data=stats)
+
 @router.get("/admin/{ticket_id}", response_model=ResponseBase)
 @handle_api_error("获取工单详情（管理员）")
 def get_admin_ticket(
@@ -234,50 +289,6 @@ def get_admin_ticket(
         }
     )
 
-@router.get("/admin/all", response_model=ResponseBase)
-@handle_api_error("获取所有工单")
-def get_all_tickets(
-    page: int = Query(1, ge=1),
-    size: int = Query(20, ge=1, le=100),
-    status: Optional[str] = Query(None),
-    type: Optional[str] = Query(None),
-    priority: Optional[str] = Query(None),
-    assigned_to: Optional[int] = Query(None),
-    keyword: Optional[str] = Query(None),
-    current_admin = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
-) -> Any:
-    ticket_service = TicketService(db)
-    skip = (page - 1) * size
-    tickets, total = ticket_service.get_all_tickets(
-        skip, size, _parse_ticket_status(status), _parse_ticket_type(type),
-        _parse_ticket_priority(priority), assigned_to, keyword
-    )
-    return ResponseBase(
-        data={
-            "tickets": [
-                {
-                    "id": t.id,
-                    "ticket_no": t.ticket_no,
-                    "title": t.title,
-                    "type": t.type.value,
-                    "status": t.status.value,
-                    "priority": t.priority.value,
-                    "user_id": t.user_id,
-                    "assigned_to": t.assigned_to,
-                    "created_at": t.created_at.isoformat(),
-                    "updated_at": t.updated_at.isoformat() if t.updated_at else None,
-                    "replies_count": len(t.replies) if t.replies else 0
-                }
-                for t in tickets
-            ],
-            "total": total,
-            "page": page,
-            "size": size,
-            "pages": (total + size - 1) // size
-        }
-    )
-
 @router.put("/admin/{ticket_id}", response_model=ResponseBase)
 @handle_api_error("更新工单")
 def update_ticket(
@@ -291,13 +302,3 @@ def update_ticket(
     if not ticket:
         raise HTTPException(status_code=404, detail="工单不存在")
     return ResponseBase(message="工单更新成功")
-
-@router.get("/admin/statistics", response_model=ResponseBase)
-@handle_api_error("获取工单统计")
-def get_ticket_statistics(
-    current_admin = Depends(get_current_admin_user),
-    db: Session = Depends(get_db)
-) -> Any:
-    ticket_service = TicketService(db)
-    stats = ticket_service.get_statistics()
-    return ResponseBase(data=stats)
