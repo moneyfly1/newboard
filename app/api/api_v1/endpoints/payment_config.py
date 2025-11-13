@@ -1,7 +1,8 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.domain_config import get_domain_config
 from app.services.payment_config import PaymentConfigService
 from app.schemas.payment_config import (
     PaymentConfig, PaymentConfigCreate, PaymentConfigUpdate,
@@ -64,9 +65,32 @@ def get_payment_config(
 @router.post("/", response_model=PaymentConfig)
 def create_payment_config(
     payment_config: PaymentConfigCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_admin_user)
 ):
+    # 如果回调地址为空，自动填充默认值
+    domain_config = get_domain_config()
+    base_url = domain_config.get_base_url(request, db)
+    
+    config_dict = payment_config.dict()
+    if not config_dict.get('notify_url'):
+        # 根据支付类型生成回调地址
+        pay_type = config_dict.get('pay_type', 'alipay')
+        if pay_type == 'alipay':
+            config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/alipay"
+        elif pay_type in ['yipay_alipay', 'yipay_wxpay']:
+            config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/yipay"
+        elif pay_type == 'wechat':
+            config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/wechat"
+        else:
+            config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/{pay_type}"
+    
+    if not config_dict.get('return_url'):
+        config_dict['return_url'] = f"{base_url}/payment/success"
+    
+    # 重新创建 PaymentConfigCreate 对象
+    payment_config = PaymentConfigCreate(**config_dict)
     service = PaymentConfigService(db)
     return service.create_payment_config(payment_config)
 
@@ -74,10 +98,38 @@ def create_payment_config(
 def update_payment_config(
     payment_config_id: int,
     payment_config: PaymentConfigUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_admin_user)
 ):
+    # 如果回调地址为空，自动填充默认值
     service = PaymentConfigService(db)
+    existing_config = service.get_payment_config(payment_config_id)
+    if existing_config:
+        domain_config = get_domain_config()
+        base_url = domain_config.get_base_url(request, db)
+        
+        config_dict = payment_config.dict(exclude_unset=True)
+        pay_type = config_dict.get('pay_type') or existing_config.pay_type
+        
+        # 如果 notify_url 为空或未提供，使用默认值
+        if 'notify_url' not in config_dict or not config_dict.get('notify_url'):
+            if pay_type == 'alipay':
+                config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/alipay"
+            elif pay_type in ['yipay_alipay', 'yipay_wxpay']:
+                config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/yipay"
+            elif pay_type == 'wechat':
+                config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/wechat"
+            else:
+                config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/{pay_type}"
+        
+        # 如果 return_url 为空或未提供，使用默认值
+        if 'return_url' not in config_dict or not config_dict.get('return_url'):
+            config_dict['return_url'] = f"{base_url}/payment/success"
+        
+        # 重新创建 PaymentConfigUpdate 对象
+        payment_config = PaymentConfigUpdate(**config_dict)
+    
     updated_config = service.update_payment_config(payment_config_id, payment_config)
     _check_config_exists(updated_config)
     return updated_config
