@@ -1367,7 +1367,9 @@ export default {
       handleSelectionChange,
       clearSelection,
       batchDeleteUsers,
-      isDeviceOverlimit
+      isDeviceOverlimit,
+      // 导出图标组件供模板使用
+      Search
     }
   }
 }
