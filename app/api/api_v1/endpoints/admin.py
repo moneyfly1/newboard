@@ -1158,7 +1158,9 @@ def get_user_details(
                     'subscription_id': sub.id
                 }).fetchone()
                 if device_result:
-                    online_devices = device_result.online_count or 0
+                    # device_query 返回 total_count，表示已订阅设备总数
+                    # 已订阅设备数量 = 在线设备数量（都是订阅了该订阅的设备总数）
+                    online_devices = device_result.total_count or 0
                 else:
                     online_devices = 0
                 if subscription_count_result:
