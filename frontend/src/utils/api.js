@@ -33,6 +33,21 @@ const handleLogout = () => {
 api.interceptors.request.use(
   config => {
     // 由于 baseURL 是 '/api/v1'，config.url 不包含 baseURL 前缀
+    // 定义公开API列表（不需要认证的API）
+    const publicAPIs = [
+      '/settings/public-settings',  // 公开设置（不需要认证）
+      '/auth/login',  // 登录接口
+      '/auth/register',  // 注册接口
+      '/auth/login-json',  // JSON登录接口
+      '/auth/refresh',  // 刷新token接口
+      '/auth/forgot-password',  // 忘记密码
+      '/auth/reset-password',  // 重置密码
+      '/settings/announcements'  // 公告（可能不需要认证，取决于后端实现）
+    ]
+    
+    // 判断是否为公开API
+    const isPublicAPI = config.url && publicAPIs.some(api => config.url.startsWith(api))
+    
     // 判断是否为管理员API：
     // 1. 路径以 '/admin' 开头
     // 2. 路径中包含 '/admin/'
@@ -49,13 +64,19 @@ api.interceptors.request.use(
       config.url.includes('/admin/') ||
       adminPaths.some(path => config.url.startsWith(path))
     )
+    
+    // 如果是公开API，不需要token，直接返回
+    if (isPublicAPI) {
+      return config
+    }
+    
     // 根据 API 类型获取对应的 token
     const token = isAdminAPI
       ? secureStorage.get('admin_token')
       : secureStorage.get('user_token')
     
-    // 如果token不存在，在开发环境下输出警告
-    if (!token && process.env.NODE_ENV === 'development') {
+    // 如果token不存在，在开发环境下输出警告（公开API除外）
+    if (!token && process.env.NODE_ENV === 'development' && !isPublicAPI) {
       console.warn(`[API] 缺少 ${isAdminAPI ? 'admin' : 'user'} token for ${config.url}`)
     }
     
