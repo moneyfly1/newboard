@@ -3094,46 +3094,59 @@ def update_package(
     current_admin = Depends(get_current_admin_user)
 ) -> Any:
     try:
-        check_query = text("SELECT id FROM packages WHERE id = :package_id")
-        existing_package = db.execute(check_query, {"package_id": package_id}).first()
-        if not existing_package:
+        # 使用ORM方式更新套餐，确保数据正确保存到数据库
+        package_service = PackageService(db)
+        package = package_service.get(package_id)
+        if not package:
             return ResponseBase(success=False, message="套餐不存在")
-        update_fields = []
-        update_values = {"package_id": package_id}
+        
+        updated = False
+        
         if "name" in package_data:
-            update_fields.append("name = :name")
-            update_values["name"] = package_data["name"]
+            package.name = package_data["name"]
+            updated = True
+            logger.info(f"更新套餐 {package_id} 的名称为: {package_data['name']}")
+        
         if "description" in package_data:
-            update_fields.append("description = :description")
-            update_values["description"] = package_data["description"]
+            package.description = package_data["description"]
+            updated = True
+        
         if "price" in package_data:
-            update_fields.append("price = :price")
-            update_values["price"] = package_data["price"]
+            package.price = package_data["price"]
+            updated = True
+            logger.info(f"更新套餐 {package_id} 的价格为: {package_data['price']}")
+        
         if "duration_days" in package_data:
-            update_fields.append("duration_days = :duration_days")
-            update_values["duration_days"] = package_data["duration_days"]
+            package.duration_days = package_data["duration_days"]
+            updated = True
+        
         if "device_limit" in package_data:
-            update_fields.append("device_limit = :device_limit")
-            update_values["device_limit"] = package_data["device_limit"]
+            package.device_limit = package_data["device_limit"]
+            updated = True
+        
         if "bandwidth_limit" in package_data:
-            update_fields.append("bandwidth_limit = :bandwidth_limit")
-            update_values["bandwidth_limit"] = package_data["bandwidth_limit"]
+            package.bandwidth_limit = package_data["bandwidth_limit"]
+            updated = True
+        
         if "sort_order" in package_data:
-            update_fields.append("sort_order = :sort_order")
-            update_values["sort_order"] = package_data["sort_order"]
+            package.sort_order = package_data["sort_order"]
+            updated = True
+        
         if "is_active" in package_data:
-            update_fields.append("is_active = :is_active")
-            update_values["is_active"] = package_data["is_active"]
-        if update_fields:
-            update_fields.append("updated_at = :updated_at")
-            update_values["updated_at"] = datetime.now()
-            db.execute(update_query, update_values)
+            package.is_active = package_data["is_active"]
+            updated = True
+        
+        if updated:
+            package.updated_at = datetime.now(timezone.utc)
             db.commit()
+            db.refresh(package)
+            logger.info(f"套餐 {package_id} 更新成功，已提交到数据库")
             return ResponseBase(message="套餐更新成功")
         else:
             return ResponseBase(message="没有需要更新的字段")
     except Exception as e:
         db.rollback()
+        logger.error(f"更新套餐 {package_id} 失败: {str(e)}", exc_info=True)
         return ResponseBase(success=False, message=f"更新套餐失败: {str(e)}")
 @router.delete("/packages/{package_id}", response_model=ResponseBase)
 def delete_package(
