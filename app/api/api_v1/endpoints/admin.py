@@ -2387,39 +2387,57 @@ def update_subscription(
         subscription = subscription_service.get(subscription_id)
         if not subscription:
             return ResponseBase(success=False, message="订阅不存在")
-        update_fields = []
-        update_values = {"subscription_id": subscription_id}
+        
+        # 使用ORM方式更新，确保数据正确保存到数据库
+        updated = False
+        
         if "device_limit" in subscription_data:
-            update_fields.append("device_limit = :device_limit")
-            update_values["device_limit"] = subscription_data["device_limit"]
+            subscription.device_limit = subscription_data["device_limit"]
+            updated = True
+            logger.info(f"更新订阅 {subscription_id} 的设备限制为: {subscription_data['device_limit']}")
+        
         if "is_active" in subscription_data:
-            update_fields.append("is_active = :is_active")
-            update_values["is_active"] = subscription_data["is_active"]
+            subscription.is_active = subscription_data["is_active"]
+            updated = True
+            logger.info(f"更新订阅 {subscription_id} 的激活状态为: {subscription_data['is_active']}")
+        
         if "expire_days" in subscription_data:
             expire_days = subscription_data["expire_days"]
             if expire_days > 0:
                 expire_time = datetime.now() + timedelta(days=expire_days)
             else:
                 expire_time = None
-            update_fields.append("expire_time = :expire_time")
-            update_values["expire_time"] = expire_time
+            subscription.expire_time = expire_time
+            updated = True
+            logger.info(f"更新订阅 {subscription_id} 的到期时间（通过天数）: {expire_time}")
+        
         if "expire_time" in subscription_data:
             try:
-                expire_time = datetime.fromisoformat(subscription_data["expire_time"].replace('Z', '+00:00'))
-                update_fields.append("expire_time = :expire_time")
-                update_values["expire_time"] = expire_time
+                expire_time_str = subscription_data["expire_time"]
+                # 处理不同的日期格式
+                if 'T' in expire_time_str:
+                    expire_time = datetime.fromisoformat(expire_time_str.replace('Z', '+00:00'))
+                else:
+                    # 处理 YYYY-MM-DD 格式
+                    expire_time = datetime.fromisoformat(expire_time_str)
+                subscription.expire_time = expire_time
+                updated = True
+                logger.info(f"更新订阅 {subscription_id} 的到期时间: {expire_time}")
             except ValueError as e:
+                logger.error(f"订阅 {subscription_id} 时间格式错误: {expire_time_str}, 错误: {str(e)}")
                 return ResponseBase(success=False, message=f"时间格式错误: {str(e)}")
-        if update_fields:
-            update_fields.append("updated_at = :updated_at")
-            update_values["updated_at"] = datetime.now()
-            db.execute(update_query, update_values)
+        
+        if updated:
+            subscription.updated_at = datetime.now()
             db.commit()
+            db.refresh(subscription)
+            logger.info(f"订阅 {subscription_id} 更新成功，已提交到数据库")
             return ResponseBase(message="订阅更新成功")
         else:
             return ResponseBase(message="没有需要更新的字段")
     except Exception as e:
         db.rollback()
+        logger.error(f"更新订阅 {subscription_id} 失败: {str(e)}", exc_info=True)
         return ResponseBase(success=False, message=f"更新订阅失败: {str(e)}")
 @router.get("/subscriptions/{subscription_id}", response_model=ResponseBase)
 def get_subscription_detail(
