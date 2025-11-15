@@ -152,7 +152,10 @@ def create_order(
             logger.debug("订单已全额使用余额支付，无需生成支付URL")
     except Exception as e:
         payment_error = str(e)
-        logger.warning(f"订单创建成功，但支付URL生成失败: {payment_error}")
+        logger.error(f"订单创建成功，但支付URL生成失败: {payment_error}", exc_info=True)
+        # 如果错误信息包含私钥相关提示，提取关键信息
+        if "私钥" in payment_error or "RSA" in payment_error:
+            payment_error = "支付配置错误：私钥格式不正确，请检查易支付配置中的商户私钥是否正确填写"
     response_data = {
         "order_id": order.id,
         "order_no": order.order_no,

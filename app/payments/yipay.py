@@ -355,30 +355,65 @@ class YipayPayment(PaymentInterface):
                     try:
                         from cryptography.hazmat.primitives import serialization
                         from cryptography.hazmat.backends import default_backend
-                        import io
                         
                         # 尝试使用cryptography库加载
                         try:
-                            # 尝试PKCS1格式
                             pem_data = private_key_str.encode('utf-8')
+                            # 尝试加载PEM格式私钥
                             private_key_obj = serialization.load_pem_private_key(pem_data, password=None, backend=default_backend())
-                            # 转换为pycryptodome格式
+                            # 转换为DER格式（PKCS8）
                             private_key_der = private_key_obj.private_bytes(
                                 encoding=serialization.Encoding.DER,
                                 format=serialization.PrivateFormat.PKCS8,
                                 encryption_algorithm=serialization.NoEncryption()
                             )
+                            # 使用DER格式导入到pycryptodome
                             private_key = RSA.import_key(private_key_der)
-                            payment_logger.debug("✅ 私钥加载成功（使用cryptography库）")
+                            payment_logger.info("✅ 私钥加载成功（使用cryptography库转换）")
                         except Exception as crypto_e:
                             payment_logger.debug(f"⚠️ cryptography库加载失败: {str(crypto_e)}")
+                            last_error = crypto_e
                     except ImportError:
                         payment_logger.debug("⚠️ cryptography库未安装，跳过此方法")
+                
+                # 尝试5: 如果还是失败，尝试修复PEM格式（可能是换行符问题）
+                if private_key is None:
+                    try:
+                        # 重新规范化PEM格式
+                        lines = private_key_str.split('\n')
+                        # 移除空行
+                        lines = [line.strip() for line in lines if line.strip()]
+                        # 重新组合
+                        if len(lines) >= 3:
+                            header = lines[0]
+                            footer = lines[-1]
+                            key_content = ''.join(lines[1:-1])
+                            # 每64个字符换行
+                            formatted_content = '\n'.join([key_content[i:i+64] for i in range(0, len(key_content), 64)])
+                            normalized_key = f"{header}\n{formatted_content}\n{footer}"
+                            private_key = RSA.import_key(normalized_key)
+                            payment_logger.info("✅ 私钥加载成功（格式规范化后）")
+                    except Exception as format_e:
+                        payment_logger.debug(f"⚠️ 格式规范化失败: {str(format_e)}")
+                        if not last_error:
+                            last_error = format_e
             
             if private_key is None:
+                # 提供详细的错误信息
                 error_msg = f"无法加载私钥: {str(last_error)}"
                 payment_logger.error(f"❌ {error_msg}")
-                payment_logger.error(f"私钥前100个字符: {private_key_str[:100]}")
+                payment_logger.error(f"私钥长度: {len(private_key_str)} 字符")
+                payment_logger.error(f"私钥前200个字符: {private_key_str[:200]}")
+                payment_logger.error(f"私钥后100个字符: {private_key_str[-100:]}")
+                
+                # 检查私钥是否完整
+                if 'BEGIN' in private_key_str and 'END' in private_key_str:
+                    begin_pos = private_key_str.find('BEGIN')
+                    end_pos = private_key_str.find('END')
+                    key_content_length = end_pos - begin_pos
+                    if key_content_length < 500:
+                        error_msg += "\n提示：私钥内容可能不完整，请确保完整复制私钥（包含BEGIN和END标记之间的所有内容）"
+                
                 raise Exception(error_msg)
             
             # 6. 使用SHA256WithRSA签名
