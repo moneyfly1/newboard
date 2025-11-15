@@ -13,7 +13,7 @@
               <el-icon><Operation /></el-icon>
               批量操作
             </el-button>
-            <el-button type="info" @click="showStatisticsDialog = true">
+            <el-button type="info" @click="handleShowStatistics">
               <el-icon><DataAnalysis /></el-icon>
               配置统计
             </el-button>
@@ -52,8 +52,41 @@
           </div>
         </div>
       </template>
+      <!-- 批量操作工具栏 -->
+      <div class="batch-actions" v-if="selectedConfigs.length > 0">
+        <div class="batch-info">
+          <span>已选择 {{ selectedConfigs.length }} 个配置</span>
+        </div>
+        <div class="batch-buttons">
+          <el-button type="success" @click="batchEnableConfigs" :loading="batchOperating">
+            <el-icon><Check /></el-icon>
+            批量启用
+          </el-button>
+          <el-button type="warning" @click="batchDisableConfigs" :loading="batchOperating">
+            <el-icon><Close /></el-icon>
+            批量禁用
+          </el-button>
+          <el-button type="danger" @click="batchDeleteConfigs" :loading="batchOperating">
+            <el-icon><Delete /></el-icon>
+            批量删除
+          </el-button>
+          <el-button @click="clearSelection">
+            <el-icon><Close /></el-icon>
+            取消选择
+          </el-button>
+        </div>
+      </div>
+
       <div class="table-wrapper desktop-only">
-        <el-table :data="paymentConfigs" style="width: 100%" v-loading="loading" :empty-text="paymentConfigs.length === 0 ? '暂无支付配置，请点击右上角【添加支付配置】按钮添加' : '暂无数据'">
+        <el-table 
+          ref="tableRef"
+          :data="paymentConfigs" 
+          style="width: 100%" 
+          v-loading="loading" 
+          :empty-text="paymentConfigs.length === 0 ? '暂无支付配置，请点击右上角【添加支付配置】按钮添加' : '暂无数据'"
+          @selection-change="handleSelectionChange"
+        >
+          <el-table-column type="selection" width="50" />
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="pay_type" label="支付类型" width="120">
             <template #default="scope">
@@ -277,18 +310,135 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 批量操作对话框 -->
+    <el-dialog
+      v-model="showBulkOperationsDialog"
+      title="批量操作"
+      width="500px"
+      :class="isMobile ? 'mobile-dialog' : ''"
+    >
+      <div v-if="selectedConfigs.length === 0" class="no-selection">
+        <el-alert
+          title="请先选择要操作的配置"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+        <div style="margin-top: 20px;">
+          <p>批量操作步骤：</p>
+          <ol style="padding-left: 20px; line-height: 2;">
+            <li>在表格中勾选要操作的支付配置</li>
+            <li>点击批量操作按钮或使用下方操作按钮</li>
+            <li>选择要执行的操作（启用/禁用/删除）</li>
+          </ol>
+        </div>
+      </div>
+      <div v-else>
+        <el-alert
+          :title="`已选择 ${selectedConfigs.length} 个配置`"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 20px;"
+        />
+        <div class="bulk-actions-list">
+          <el-button 
+            type="success" 
+            @click="batchEnableConfigs" 
+            :loading="batchOperating"
+            style="width: 100%; margin-bottom: 10px;"
+          >
+            <el-icon><Check /></el-icon>
+            批量启用 ({{ selectedConfigs.length }})
+          </el-button>
+          <el-button 
+            type="warning" 
+            @click="batchDisableConfigs" 
+            :loading="batchOperating"
+            style="width: 100%; margin-bottom: 10px;"
+          >
+            <el-icon><Close /></el-icon>
+            批量禁用 ({{ selectedConfigs.length }})
+          </el-button>
+          <el-button 
+            type="danger" 
+            @click="batchDeleteConfigs" 
+            :loading="batchOperating"
+            style="width: 100%;"
+          >
+            <el-icon><Delete /></el-icon>
+            批量删除 ({{ selectedConfigs.length }})
+          </el-button>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showBulkOperationsDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 配置统计对话框 -->
+    <el-dialog
+      v-model="showStatisticsDialog"
+      title="配置统计"
+      width="600px"
+      :class="isMobile ? 'mobile-dialog' : ''"
+    >
+      <div v-if="statisticsLoading" style="text-align: center; padding: 40px;">
+        <el-icon class="is-loading" style="font-size: 24px;"><Loading /></el-icon>
+        <p style="margin-top: 10px;">加载中...</p>
+      </div>
+      <div v-else-if="statisticsData">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="总配置数">
+            <el-tag type="info">{{ statisticsData.total_configs || 0 }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="已启用">
+            <el-tag type="success">{{ statisticsData.active_configs || 0 }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="已禁用">
+            <el-tag type="warning">{{ statisticsData.inactive_configs || 0 }}</el-tag>
+          </el-descriptions-item>
+        </el-descriptions>
+        
+        <div style="margin-top: 20px;">
+          <h4 style="margin-bottom: 15px;">按支付类型统计：</h4>
+          <el-table :data="typeStatsList" style="width: 100%" size="small">
+            <el-table-column prop="type" label="支付类型" width="150">
+              <template #default="scope">
+                <el-tag :type="getTypeTagType(scope.row.type)">
+                  {{ getTypeText(scope.row.type) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="count" label="已启用数量" align="center">
+              <template #default="scope">
+                <el-tag type="success">{{ scope.row.count }}</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+      <div v-else style="text-align: center; padding: 40px;">
+        <el-empty description="暂无统计数据" />
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="loadStatistics">刷新</el-button>
+        <el-button @click="showStatisticsDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, Operation, Plus, Edit, Delete, DataAnalysis } from '@element-plus/icons-vue'
+import { Download, Operation, Plus, Edit, Delete, DataAnalysis, Check, Close, Loading } from '@element-plus/icons-vue'
 import { paymentAPI } from '@/utils/api'
 
 export default {
   name: 'AdminPaymentConfig',
-  components: { Download, Operation, Plus, Edit, Delete, DataAnalysis },
+  components: { Download, Operation, Plus, Edit, Delete, DataAnalysis, Check, Close, Loading },
   setup() {
     const loading = ref(false)
     const saving = ref(false)
@@ -298,6 +448,11 @@ export default {
     const showStatisticsDialog = ref(false)
     const editingConfig = ref(null)
     const isMobile = ref(false)
+    const selectedConfigs = ref([])
+    const batchOperating = ref(false)
+    const statisticsLoading = ref(false)
+    const statisticsData = ref(null)
+    const tableRef = ref(null)
 
     const checkMobile = () => {
       isMobile.value = window.innerWidth <= 768
@@ -570,9 +725,153 @@ export default {
       return typeMap[type] || 'info'
     }
 
-    const exportConfigs = () => {
-      ElMessage.info('导出功能开发中')
+    const exportConfigs = async () => {
+      try {
+        const response = await paymentAPI.exportPaymentConfigs()
+        if (response && response.data) {
+          const data = response.data.data || response.data
+          const filename = response.data.filename || `payment_configs_${new Date().getTime()}.json`
+          
+          // 创建JSON文件并下载
+          const jsonStr = JSON.stringify(data, null, 2)
+          const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' })
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = filename
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          URL.revokeObjectURL(url)
+          
+          ElMessage.success('配置导出成功')
+        } else {
+          ElMessage.error('导出失败：数据格式错误')
+        }
+      } catch (error) {
+        ElMessage.error('导出失败: ' + (error.response?.data?.detail || error.message))
+      }
     }
+
+    const handleSelectionChange = (selection) => {
+      selectedConfigs.value = selection
+    }
+
+    const clearSelection = () => {
+      selectedConfigs.value = []
+      // 清除表格选择
+      if (tableRef.value) {
+        tableRef.value.clearSelection()
+      }
+    }
+
+    const batchEnableConfigs = async () => {
+      if (selectedConfigs.value.length === 0) {
+        ElMessage.warning('请先选择要启用的配置')
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          `确定要启用 ${selectedConfigs.value.length} 个支付配置吗？`,
+          '确认批量启用',
+          { type: 'warning' }
+        )
+        batchOperating.value = true
+        const configIds = selectedConfigs.value.map(c => c.id)
+        await paymentAPI.bulkEnablePaymentConfigs(configIds)
+        ElMessage.success(`成功启用 ${configIds.length} 个配置`)
+        clearSelection()
+        showBulkOperationsDialog.value = false
+        loadPaymentConfigs()
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('批量启用失败: ' + (error.response?.data?.detail || error.message))
+        }
+      } finally {
+        batchOperating.value = false
+      }
+    }
+
+    const batchDisableConfigs = async () => {
+      if (selectedConfigs.value.length === 0) {
+        ElMessage.warning('请先选择要禁用的配置')
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          `确定要禁用 ${selectedConfigs.value.length} 个支付配置吗？`,
+          '确认批量禁用',
+          { type: 'warning' }
+        )
+        batchOperating.value = true
+        const configIds = selectedConfigs.value.map(c => c.id)
+        await paymentAPI.bulkDisablePaymentConfigs(configIds)
+        ElMessage.success(`成功禁用 ${configIds.length} 个配置`)
+        clearSelection()
+        showBulkOperationsDialog.value = false
+        loadPaymentConfigs()
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('批量禁用失败: ' + (error.response?.data?.detail || error.message))
+        }
+      } finally {
+        batchOperating.value = false
+      }
+    }
+
+    const batchDeleteConfigs = async () => {
+      if (selectedConfigs.value.length === 0) {
+        ElMessage.warning('请先选择要删除的配置')
+        return
+      }
+      try {
+        await ElMessageBox.confirm(
+          `确定要删除 ${selectedConfigs.value.length} 个支付配置吗？此操作不可恢复！`,
+          '确认批量删除',
+          { type: 'error' }
+        )
+        batchOperating.value = true
+        const configIds = selectedConfigs.value.map(c => c.id)
+        await paymentAPI.bulkDeletePaymentConfigs(configIds)
+        ElMessage.success(`成功删除 ${configIds.length} 个配置`)
+        clearSelection()
+        showBulkOperationsDialog.value = false
+        loadPaymentConfigs()
+      } catch (error) {
+        if (error !== 'cancel') {
+          ElMessage.error('批量删除失败: ' + (error.response?.data?.detail || error.message))
+        }
+      } finally {
+        batchOperating.value = false
+      }
+    }
+
+    const loadStatistics = async () => {
+      statisticsLoading.value = true
+      try {
+        const response = await paymentAPI.getPaymentConfigStats()
+        if (response && response.data) {
+          statisticsData.value = response.data
+        } else {
+          statisticsData.value = null
+        }
+      } catch (error) {
+        ElMessage.error('加载统计数据失败: ' + (error.response?.data?.detail || error.message))
+        statisticsData.value = null
+      } finally {
+        statisticsLoading.value = false
+      }
+    }
+
+    const typeStatsList = computed(() => {
+      if (!statisticsData.value || !statisticsData.value.type_stats) {
+        return []
+      }
+      return Object.entries(statisticsData.value.type_stats).map(([type, count]) => ({
+        type,
+        count
+      }))
+    })
 
     const handleMobileAction = (command) => {
       switch (command) {
@@ -584,7 +883,15 @@ export default {
           break
         case 'statistics':
           showStatisticsDialog.value = true
+          loadStatistics()
           break
+      }
+    }
+
+    // 监听统计对话框打开
+    const watchStatisticsDialog = () => {
+      if (showStatisticsDialog.value && !statisticsData.value) {
+        loadStatistics()
       }
     }
 
@@ -592,11 +899,20 @@ export default {
       checkMobile()
       window.addEventListener('resize', checkMobile)
       loadPaymentConfigs()
+      // 监听统计对话框
+      if (showStatisticsDialog.value) {
+        loadStatistics()
+      }
     })
 
     onUnmounted(() => {
       window.removeEventListener('resize', checkMobile)
     })
+
+    const handleShowStatistics = () => {
+      showStatisticsDialog.value = true
+      loadStatistics()
+    }
 
     return {
       loading,
@@ -607,6 +923,11 @@ export default {
       showStatisticsDialog,
       editingConfig,
       configForm,
+      selectedConfigs,
+      batchOperating,
+      statisticsLoading,
+      statisticsData,
+      typeStatsList,
       loadPaymentConfigs,
       saveConfig,
       editConfig,
@@ -617,6 +938,14 @@ export default {
       getTypeTagType,
       exportConfigs,
       handleMobileAction,
+      handleSelectionChange,
+      clearSelection,
+      batchEnableConfigs,
+      batchDisableConfigs,
+      batchDeleteConfigs,
+      loadStatistics,
+      handleShowStatistics,
+      tableRef,
       isMobile
     }
   }

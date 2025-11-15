@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.domain_config import get_domain_config
@@ -184,7 +184,7 @@ def get_payment_config_config(
 
 @router.post("/bulk-enable")
 def bulk_enable_payment_configs(
-    config_ids: List[int],
+    config_ids: List[int] = Body(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_admin_user)
 ):
@@ -194,7 +194,7 @@ def bulk_enable_payment_configs(
 
 @router.post("/bulk-disable")
 def bulk_disable_payment_configs(
-    config_ids: List[int],
+    config_ids: List[int] = Body(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_admin_user)
 ):
@@ -204,7 +204,7 @@ def bulk_disable_payment_configs(
 
 @router.post("/bulk-delete")
 def bulk_delete_payment_configs(
-    config_ids: List[int],
+    config_ids: List[int] = Body(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_admin_user)
 ):
