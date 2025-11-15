@@ -177,7 +177,8 @@ chmod +x install.sh
 
 脚本会自动完成：
 - ✅ **自动配置 `.env` 文件**（DOMAIN、BASE_URL、SSL_ENABLED等）
-- ✅ **自动生成Nginx配置文件**（包含前端静态文件、SPA路由等）
+- ✅ **自动生成完整的Nginx配置文件**（包含反向代理、支付回调、前端静态文件等）
+- ✅ **根据域名自动设置路径**（宝塔面板：`/www/wwwroot/域名/frontend/dist`）
 - ✅ **自动检测宝塔面板**，并提供配置指导
 - ✅ **自动安装Nginx配置**（标准Nginx环境）
 - ✅ **支持Certbot自动申请SSL证书**（可选）
@@ -200,10 +201,14 @@ chmod +x install.sh
   5. 保存并重载配置
 
 **生成的Nginx配置包含**：
-- ✅ 前端静态文件目录配置
+- ✅ **根据域名自动设置路径**（宝塔面板：`/www/wwwroot/域名/frontend/dist`）
+- ✅ **API反向代理配置**（`/api/` → `http://127.0.0.1:8000`）
+- ✅ **支付回调特殊配置**（`/api/v1/payment/notify/`）
+- ✅ **兼容路由**（`/notify`）
 - ✅ 前端SPA路由（伪静态）
 - ✅ 静态资源缓存
 - ✅ SSL配置（如果使用HTTPS）
+- ✅ 宝塔面板扩展配置include（如果使用宝塔面板）
 
 #### 步骤3：验证安装
 
@@ -224,6 +229,8 @@ chmod +x install.sh
 - **选项2：配置域名和Nginx** ⭐ **推荐**
   - **一键配置域名和Nginx**，自动完成所有配置
   - ✅ 自动配置`.env`文件（DOMAIN、BASE_URL、SSL_ENABLED等）
+  - ✅ **根据输入的域名自动生成完整Nginx配置**（包含反向代理、支付回调等）
+  - ✅ **自动设置路径**（宝塔面板：`/www/wwwroot/域名/frontend/dist`）
   - ✅ **标准Nginx：自动安装配置文件，无需手动操作**
   - ✅ **宝塔面板：生成配置文件，需复制到宝塔面板**
   - ✅ 支持Certbot自动申请SSL证书（可选）
