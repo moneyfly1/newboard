@@ -539,6 +539,52 @@
               </el-tooltip>
             </span>
           </div>
+          <!-- 订阅二维码区域 - 移动端显示 -->
+          <div class="subscription-qrcode-section" v-if="subscription.subscription_url || subscription.v2ray_url">
+            <div class="qrcode-card">
+              <div class="qrcode-header">
+                <el-icon style="color: #409eff; margin-right: 6px; font-size: 18px;"><Link /></el-icon>
+                <span class="qrcode-title">Shadowrocket 订阅二维码</span>
+              </div>
+              <div class="qrcode-content">
+                <div class="qrcode-wrapper">
+                  <img 
+                    :src="generateQRCode(subscription)" 
+                    alt="订阅二维码" 
+                    class="qrcode-image"
+                  />
+                </div>
+                <div class="qrcode-info" v-if="subscription.expire_time">
+                  <div class="expiry-info">
+                    <el-icon style="color: #f56c6c; margin-right: 4px;"><Clock /></el-icon>
+                    <span class="expiry-label">失效日期：</span>
+                    <span class="expiry-date">{{ formatExpireDate(subscription.expire_time) }}</span>
+                  </div>
+                </div>
+                <div class="qrcode-actions">
+                  <el-button 
+                    type="primary" 
+                    size="default"
+                    @click="importToShadowrocket(subscription)"
+                    class="import-btn"
+                  >
+                    <el-icon style="margin-right: 6px;"><Download /></el-icon>
+                    一键导入 Shadowrocket
+                  </el-button>
+                  <el-button 
+                    type="default" 
+                    size="default"
+                    @click="showQRCode(subscription)"
+                    class="view-btn"
+                  >
+                    <el-icon style="margin-right: 6px;"><View /></el-icon>
+                    查看大图
+                  </el-button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
           <!-- 订阅地址区域 - 独立卡片样式 -->
           <div class="subscription-urls-section" v-if="subscription.v2ray_url || subscription.clash_url">
             <div class="subscription-url-card" v-if="subscription.v2ray_url">
@@ -1210,7 +1256,10 @@ export default {
       if (subscription.qrcodeUrl) {
         // 后端已经生成了完整的sub://链接，直接使用
         const qrData = subscription.qrcodeUrl
-        return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}&ecc=M&margin=10`
+        // 移动端使用更大的尺寸（400x400），桌面端使用200x200
+        const isMobile = window.innerWidth <= 768
+        const qrSize = isMobile ? '400x400' : '200x200'
+        return `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}&data=${encodeURIComponent(qrData)}&ecc=M&margin=10`
       }
       
       // 如果没有后端提供的qrcodeUrl，则前端生成
@@ -1253,8 +1302,10 @@ export default {
         return ''
       }
       
-      // 生成二维码，使用更高的质量设置
-      return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}&ecc=M&margin=10`
+      // 生成二维码，移动端使用更大的尺寸（400x400），桌面端使用200x200
+      const isMobile = window.innerWidth <= 768
+      const qrSize = isMobile ? '400x400' : '200x200'
+      return `https://api.qrserver.com/v1/create-qr-code/?size=${qrSize}&data=${encodeURIComponent(qrData)}&ecc=M&margin=10`
     }
 
     // 显示二维码
@@ -1271,6 +1322,72 @@ export default {
       link.href = currentQRCode.value
       link.download = 'subscription-qr.png'
       link.click()
+    }
+
+    // 格式化失效日期
+    const formatExpireDate = (expireTime) => {
+      if (!expireTime) return '未设置'
+      const date = new Date(expireTime)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    // 一键导入到 Shadowrocket
+    const importToShadowrocket = (subscription) => {
+      if (!subscription.subscription_url && !subscription.v2ray_url) {
+        ElMessage.warning('该订阅没有可用的订阅地址')
+        return
+      }
+
+      // 生成订阅URL
+      let subscriptionUrl = ''
+      if (subscription.qrcodeUrl) {
+        // 从 qrcodeUrl 中提取 sub:// 链接
+        const match = subscription.qrcodeUrl.match(/sub:\/\/([^#]+)/)
+        if (match) {
+          subscriptionUrl = atob(match[1])
+        } else {
+          subscriptionUrl = subscription.v2ray_url || subscription.subscription_url
+        }
+      } else if (subscription.v2ray_url) {
+        subscriptionUrl = subscription.v2ray_url
+      } else if (subscription.subscription_url) {
+        const baseUrl = window.location.origin
+        subscriptionUrl = `${baseUrl}/api/v1/subscriptions/ssr/${subscription.subscription_url}`
+      }
+
+      if (!subscriptionUrl) {
+        ElMessage.error('无法生成订阅链接')
+        return
+      }
+
+      // 尝试直接打开 Shadowrocket 的 sub:// 链接
+      try {
+        // 生成 sub:// 链接
+        const encodedUrl = btoa(subscriptionUrl)
+        let expiryDisplayName = ''
+        if (subscription.expire_time) {
+          expiryDisplayName = formatExpireDate(subscription.expire_time)
+        } else {
+          expiryDisplayName = '订阅'
+        }
+        const subLink = `sub://${encodedUrl}#${encodeURIComponent(expiryDisplayName)}`
+        
+        // 尝试打开 Shadowrocket
+        window.location.href = subLink
+        
+        // 如果无法打开，则复制链接到剪贴板
+        setTimeout(() => {
+          copyToClipboard(subscriptionUrl)
+          ElMessage.success('已复制订阅链接到剪贴板，请在 Shadowrocket 中手动添加')
+        }, 500)
+      } catch (error) {
+        // 如果失败，复制链接
+        copyToClipboard(subscriptionUrl)
+        ElMessage.success('已复制订阅链接到剪贴板，请在 Shadowrocket 中手动添加')
+      }
     }
 
     // 显示用户详情
@@ -1957,6 +2074,8 @@ export default {
       generateQRCode,
       showQRCode,
       downloadQRCode,
+      formatExpireDate,
+      importToShadowrocket,
       showUserDetails,
       loadUserDevices,
       deleteDevice,
@@ -2812,6 +2931,168 @@ export default {
 :deep(.el-input__wrapper.is-focus) {
   border-color: #1677ff !important;
   box-shadow: none !important;
+}
+
+// 移动端订阅二维码区域样式
+.subscription-qrcode-section {
+  margin-top: 16px;
+  margin-bottom: 16px;
+  padding-top: 16px;
+  border-top: 2px solid rgba(66, 165, 245, 0.3);
+}
+
+.qrcode-card {
+  background: linear-gradient(135deg, rgba(66, 165, 245, 0.08) 0%, rgba(102, 126, 234, 0.08) 100%);
+  border: 2px solid rgba(66, 165, 245, 0.25);
+  border-radius: 16px;
+  padding: 20px;
+  transition: all 0.3s ease;
+  
+  &:active {
+    transform: scale(0.98);
+    border-color: rgba(66, 165, 245, 0.4);
+  }
+  
+  .qrcode-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    font-weight: 600;
+    font-size: 1rem;
+    color: #1e293b;
+    
+    .qrcode-title {
+      font-size: 1.05rem;
+      color: #409eff;
+    }
+  }
+  
+  .qrcode-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    
+    .qrcode-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      padding: 20px;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      
+      .qrcode-image {
+        width: 100%;
+        max-width: 320px;
+        min-width: 250px;
+        height: auto;
+        border-radius: 8px;
+        display: block;
+        margin: 0 auto;
+      }
+    }
+    
+    .qrcode-info {
+      width: 100%;
+      text-align: center;
+      
+      .expiry-info {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 12px;
+        background: rgba(245, 108, 108, 0.1);
+        border-radius: 8px;
+        border: 1px solid rgba(245, 108, 108, 0.2);
+        
+        .expiry-label {
+          font-size: 0.9rem;
+          color: #606266;
+          font-weight: 500;
+        }
+        
+        .expiry-date {
+          font-size: 0.95rem;
+          color: #f56c6c;
+          font-weight: 600;
+        }
+      }
+    }
+    
+    .qrcode-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+      width: 100%;
+      
+      .import-btn,
+      .view-btn {
+        width: 100%;
+        min-width: 100%;
+        max-width: 100%;
+        height: 48px;
+        min-height: 48px;
+        max-height: 48px;
+        font-size: 1rem;
+        font-weight: 600;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(64, 158, 255, 0.3);
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        
+        &:active {
+          transform: scale(0.96);
+          box-shadow: 0 1px 4px rgba(64, 158, 255, 0.2);
+        }
+        
+        // 确保按钮内容居中
+        :deep(.el-icon) {
+          margin-right: 6px;
+          flex-shrink: 0;
+        }
+        
+        // 确保按钮文字和图标都居中
+        :deep(span) {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+        }
+      }
+      
+      .import-btn {
+        background: linear-gradient(135deg, #409eff 0%, #667eea 100%);
+        border: none;
+        color: #ffffff;
+        
+        &:hover {
+          background: linear-gradient(135deg, #66b1ff 0%, #7c8ff0 100%);
+        }
+      }
+      
+      .view-btn {
+        background: #ffffff;
+        border: 1px solid #dcdfe6;
+        color: #606266;
+        
+        &:hover {
+          background: #f5f7fa;
+          border-color: #c0c4cc;
+          color: #409eff;
+        }
+      }
+    }
+  }
 }
 
 // 移动端订阅地址区域样式
