@@ -262,21 +262,34 @@ def pay_order(
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ) -> Any:
-    order_service = OrderService(db)
-    order = order_service.get_by_order_no(order_no)
-    _validate_order_access(order, current_user)
-    if order.status != "pending":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="只能支付待支付的订单")
-    payment_url = order_service.generate_payment_url(order)
-    return ResponseBase(
-        message="支付链接生成成功",
-        data={
-            "order_no": order.order_no,
-            "amount": order.amount,
-            "payment_url": payment_url,
-            "payment_qr_code": payment_url
-        }
-    )
+    try:
+        order_service = OrderService(db)
+        order = order_service.get_by_order_no(order_no)
+        _validate_order_access(order, current_user)
+        if order.status != "pending":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="只能支付待支付的订单")
+        payment_url = order_service.generate_payment_url(order)
+        return ResponseBase(
+            message="支付链接生成成功",
+            data={
+                "order_no": order.order_no,
+                "amount": order.amount,
+                "payment_url": payment_url,
+                "payment_qr_code": payment_url
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"生成支付链接失败: {str(e)}", exc_info=True)
+        error_msg = str(e)
+        # 如果是易支付审核问题，提供更友好的提示
+        if "未通过审核" in error_msg or "审核" in error_msg:
+            error_msg = "易支付商户未通过审核，无法使用支付功能。请前往易支付平台完成商户审核。"
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=error_msg
+        )
 
 @router.post("/payment/notify", response_model=ResponseBase)
 def payment_notify(db: Session = Depends(get_db)) -> Any:

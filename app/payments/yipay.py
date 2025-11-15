@@ -186,7 +186,15 @@ class YipayPayment(PaymentInterface):
                 # 失败
                 error_msg = result.get('msg', '未知错误')
                 payment_logger.error(f"❌ 易支付API调用失败: code={code}, msg={error_msg}")
-                raise Exception(f"易支付API调用失败（{code}）: {error_msg}")
+                
+                # 根据错误代码提供更友好的提示
+                if code == -1:
+                    if '未通过审核' in error_msg or '审核' in error_msg:
+                        raise Exception(f"易支付商户未通过审核，无法使用支付功能。请前往易支付平台完成商户审核，或联系易支付客服。错误详情：{error_msg}")
+                    else:
+                        raise Exception(f"易支付配置错误（错误代码：{code}）：{error_msg}。请检查易支付配置是否正确。")
+                else:
+                    raise Exception(f"易支付API调用失败（错误代码：{code}）：{error_msg}")
                 
         except Exception as e:
             payment_logger.error(f"易支付订单创建失败: {str(e)}")
