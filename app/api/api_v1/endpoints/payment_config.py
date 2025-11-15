@@ -81,8 +81,12 @@ def create_payment_config(
             config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/alipay"
         elif pay_type in ['yipay_alipay', 'yipay_wxpay']:
             config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/yipay"
+        elif pay_type.startswith('codepay_'):
+            config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/codepay"
         elif pay_type == 'wechat':
             config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/wechat"
+        elif pay_type == 'paypal':
+            config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/paypal"
         else:
             config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/{pay_type}"
     
@@ -118,8 +122,12 @@ def update_payment_config(
                 config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/alipay"
             elif pay_type in ['yipay_alipay', 'yipay_wxpay']:
                 config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/yipay"
+            elif pay_type.startswith('codepay_'):
+                config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/codepay"
             elif pay_type == 'wechat':
                 config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/wechat"
+            elif pay_type == 'paypal':
+                config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/paypal"
             else:
                 config_dict['notify_url'] = f"{base_url}/api/v1/payment/notify/{pay_type}"
         

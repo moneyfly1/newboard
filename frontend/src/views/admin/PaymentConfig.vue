@@ -215,11 +215,24 @@
       <el-form :model="configForm" label-width="120px">
         <el-form-item label="支付类型">
           <el-select v-model="configForm.pay_type" placeholder="选择支付类型">
-            <el-option label="支付宝" value="alipay" />
-            <el-option label="易支付-支付宝" value="yipay_alipay" />
-            <el-option label="易支付-微信" value="yipay_wxpay" />
-            <el-option label="微信支付" value="wechat" />
-            <el-option label="PayPal" value="paypal" />
+            <el-option-group label="官方支付">
+              <el-option label="支付宝" value="alipay" />
+              <el-option label="微信支付" value="wechat" />
+            </el-option-group>
+            <el-option-group label="第三方支付网关">
+              <el-option label="易支付-支付宝" value="yipay_alipay" />
+              <el-option label="易支付-微信" value="yipay_wxpay" />
+              <el-option label="码支付-支付宝" value="codepay_alipay" />
+              <el-option label="码支付-微信" value="codepay_wechat" />
+              <el-option label="码支付-QQ钱包" value="codepay_qq" />
+            </el-option-group>
+            <el-option-group label="国际支付">
+              <el-option label="PayPal" value="paypal" />
+              <el-option label="Stripe" value="stripe" />
+            </el-option-group>
+            <el-option-group label="其他">
+              <el-option label="银行转账" value="bank_transfer" />
+            </el-option-group>
           </el-select>
         </el-form-item>
 
@@ -284,6 +297,66 @@
         <el-form-item label="API密钥" v-if="configForm.pay_type === 'wechat'">
           <el-input v-model="configForm.wechat_api_key" placeholder="请输入微信API密钥" />
         </el-form-item>
+
+        <!-- PayPal配置 -->
+        <el-form-item label="PayPal客户端ID" v-if="configForm.pay_type === 'paypal'">
+          <el-input v-model="configForm.paypal_client_id" placeholder="请输入PayPal客户端ID" />
+          <div class="form-tip">在PayPal开发者后台创建应用后获取</div>
+        </el-form-item>
+        <el-form-item label="PayPal客户端密钥" v-if="configForm.pay_type === 'paypal'">
+          <el-input v-model="configForm.paypal_secret" type="password" show-password placeholder="请输入PayPal客户端密钥" />
+          <div class="form-tip">在PayPal开发者后台创建应用后获取</div>
+        </el-form-item>
+        <el-form-item label="PayPal模式" v-if="configForm.pay_type === 'paypal'">
+          <el-select v-model="configForm.paypal_mode" placeholder="选择PayPal模式">
+            <el-option label="沙箱模式（测试）" value="sandbox" />
+            <el-option label="生产模式（正式）" value="live" />
+          </el-select>
+          <div class="form-tip">沙箱模式用于测试，生产模式用于正式环境</div>
+        </el-form-item>
+
+        <!-- Stripe配置 -->
+        <el-form-item label="Stripe公钥" v-if="configForm.pay_type === 'stripe'">
+          <el-input v-model="configForm.stripe_publishable_key" placeholder="请输入Stripe公钥" />
+          <div class="form-tip">用于前端的公钥（Publishable Key）</div>
+        </el-form-item>
+        <el-form-item label="Stripe私钥" v-if="configForm.pay_type === 'stripe'">
+          <el-input v-model="configForm.stripe_secret_key" type="password" show-password placeholder="请输入Stripe私钥" />
+          <div class="form-tip">用于后端的私钥（Secret Key）</div>
+        </el-form-item>
+        <el-form-item label="Stripe Webhook密钥" v-if="configForm.pay_type === 'stripe'">
+          <el-input v-model="configForm.stripe_webhook_secret" type="password" show-password placeholder="请输入Stripe Webhook签名密钥（可选）" />
+          <div class="form-tip">用于验证Webhook回调的签名密钥（可选）</div>
+        </el-form-item>
+
+        <!-- 码支付配置 -->
+        <el-form-item label="码支付ID" v-if="configForm.pay_type.startsWith('codepay_')">
+          <el-input v-model="configForm.codepay_id" placeholder="请输入码支付商户ID" />
+          <div class="form-tip">在码支付后台->商户中心查看</div>
+        </el-form-item>
+        <el-form-item label="码支付Token" v-if="configForm.pay_type.startsWith('codepay_')">
+          <el-input v-model="configForm.codepay_token" type="password" show-password placeholder="请输入码支付通信密钥Token" />
+          <div class="form-tip">在码支付后台->商户中心->API接口中查看</div>
+        </el-form-item>
+        <el-form-item label="码支付网关" v-if="configForm.pay_type.startsWith('codepay_')">
+          <el-input v-model="configForm.codepay_gateway" placeholder="请输入码支付网关地址" />
+          <div class="form-tip">默认: https://api.xiuxiu888.com/creat_order</div>
+        </el-form-item>
+
+        <!-- 银行转账配置 -->
+        <el-form-item label="银行名称" v-if="configForm.pay_type === 'bank_transfer'">
+          <el-input v-model="configForm.bank_name" placeholder="请输入银行名称" />
+        </el-form-item>
+        <el-form-item label="银行账号" v-if="configForm.pay_type === 'bank_transfer'">
+          <el-input v-model="configForm.bank_account" placeholder="请输入银行账号" />
+        </el-form-item>
+        <el-form-item label="开户支行" v-if="configForm.pay_type === 'bank_transfer'">
+          <el-input v-model="configForm.bank_branch" placeholder="请输入开户支行（可选）" />
+        </el-form-item>
+        <el-form-item label="账户持有人" v-if="configForm.pay_type === 'bank_transfer'">
+          <el-input v-model="configForm.account_holder" placeholder="请输入账户持有人姓名" />
+        </el-form-item>
+
         <el-form-item label="同步回调地址">
           <el-input v-model="configForm.return_url" placeholder="请输入同步回调地址" />
           <div class="form-tip">支付完成后跳转的地址</div>
@@ -472,14 +545,25 @@ export default {
       yipay_pid: '',
       yipay_private_key: '',
       yipay_public_key: '',
-      yipay_gateway: 'https://pay.yi-zhifu.cn/api/pay/create',
+      yipay_gateway: 'https://pay.yi-zhifu.cn/',
       yipay_md5_key: '',
       // PayPal配置
       paypal_client_id: '',
       paypal_secret: '',
+      paypal_mode: 'sandbox',  // sandbox 或 live
       // Stripe配置
       stripe_publishable_key: '',
       stripe_secret_key: '',
+      stripe_webhook_secret: '',
+      // 码支付配置
+      codepay_id: '',
+      codepay_token: '',
+      codepay_gateway: 'https://api.xiuxiu888.com/creat_order',
+      // 银行转账配置
+      bank_name: '',
+      bank_account: '',
+      bank_branch: '',
+      account_holder: '',
       return_url: '',
       notify_url: '',
       status: 1,
@@ -568,9 +652,32 @@ export default {
         } else if (configForm.pay_type === 'paypal') {
           requestData.paypal_client_id = configForm.paypal_client_id
           requestData.paypal_secret = configForm.paypal_secret
+          requestData.paypal_mode = configForm.paypal_mode || 'sandbox'
         } else if (configForm.pay_type === 'stripe') {
           requestData.stripe_publishable_key = configForm.stripe_publishable_key
           requestData.stripe_secret_key = configForm.stripe_secret_key
+          requestData.stripe_webhook_secret = configForm.stripe_webhook_secret || ''
+        } else if (configForm.pay_type.startsWith('codepay_')) {
+          // 码支付配置保存到config_json
+          const codepay_type_map = {
+            'codepay_alipay': '1',
+            'codepay_wechat': '3',
+            'codepay_qq': '2'
+          }
+          requestData.config_json = {
+            codepay_type: codepay_type_map[configForm.pay_type] || '1',
+            codepay_id: configForm.codepay_id,
+            codepay_token: configForm.codepay_token,
+            codepay_gateway: configForm.codepay_gateway || 'https://api.xiuxiu888.com/creat_order'
+          }
+        } else if (configForm.pay_type === 'bank_transfer') {
+          // 银行转账配置保存到config_json
+          requestData.config_json = {
+            bank_name: configForm.bank_name,
+            bank_account: configForm.bank_account,
+            bank_branch: configForm.bank_branch || '',
+            account_holder: configForm.account_holder
+          }
         }
 
         if (editingConfig.value) {
@@ -612,11 +719,22 @@ export default {
         yipay_gateway: configData.yipay_gateway || 'https://pay.yi-zhifu.cn/api/pay/create',
         yipay_md5_key: configData.yipay_md5_key || '',
         // PayPal配置
-        paypal_client_id: config.paypal_client_id || configData.client_id || '',
-        paypal_secret: config.paypal_secret || configData.secret || '',
+        paypal_client_id: config.paypal_client_id || configData.paypal_client_id || configData.client_id || '',
+        paypal_secret: config.paypal_secret || configData.paypal_secret || configData.secret || '',
+        paypal_mode: config.paypal_mode || configData.paypal_mode || 'sandbox',
         // Stripe配置
-        stripe_publishable_key: config.stripe_publishable_key || configData.publishable_key || '',
-        stripe_secret_key: config.stripe_secret_key || configData.secret_key || '',
+        stripe_publishable_key: config.stripe_publishable_key || configData.stripe_publishable_key || configData.publishable_key || '',
+        stripe_secret_key: config.stripe_secret_key || configData.stripe_secret_key || configData.secret_key || '',
+        stripe_webhook_secret: config.stripe_webhook_secret || configData.stripe_webhook_secret || '',
+        // 码支付配置
+        codepay_id: configData.codepay_id || '',
+        codepay_token: configData.codepay_token || '',
+        codepay_gateway: configData.codepay_gateway || 'https://api.xiuxiu888.com/creat_order',
+        // 银行转账配置
+        bank_name: configData.bank_name || '',
+        bank_account: configData.bank_account || '',
+        bank_branch: configData.bank_branch || '',
+        account_holder: configData.account_holder || '',
         return_url: config.return_url || '',
         notify_url: config.notify_url || '',
         status: config.status !== undefined ? config.status : 1,
@@ -690,9 +808,20 @@ export default {
         // PayPal配置
         paypal_client_id: '',
         paypal_secret: '',
+        paypal_mode: 'sandbox',
         // Stripe配置
         stripe_publishable_key: '',
         stripe_secret_key: '',
+        stripe_webhook_secret: '',
+        // 码支付配置
+        codepay_id: '',
+        codepay_token: '',
+        codepay_gateway: 'https://api.xiuxiu888.com/creat_order',
+        // 银行转账配置
+        bank_name: '',
+        bank_account: '',
+        bank_branch: '',
+        account_holder: '',
         return_url: '',
         notify_url: '',
         status: 1,
@@ -704,11 +833,16 @@ export default {
     const getTypeText = (type) => {
       const typeMap = {
         'alipay': '支付宝',
+        'wechat': '微信支付',
         'yipay': '易支付',
         'yipay_alipay': '易支付-支付宝',
         'yipay_wxpay': '易支付-微信',
-        'wechat': '微信支付',
-        'paypal': 'PayPal'
+        'codepay_alipay': '码支付-支付宝',
+        'codepay_wechat': '码支付-微信',
+        'codepay_qq': '码支付-QQ钱包',
+        'paypal': 'PayPal',
+        'stripe': 'Stripe',
+        'bank_transfer': '银行转账'
       }
       return typeMap[type] || type
     }
@@ -716,11 +850,16 @@ export default {
     const getTypeTagType = (type) => {
       const typeMap = {
         'alipay': 'success',
+        'wechat': 'primary',
         'yipay': 'warning',
         'yipay_alipay': 'warning',
         'yipay_wxpay': 'warning',
-        'wechat': 'primary',
-        'paypal': 'warning'
+        'codepay_alipay': 'success',
+        'codepay_wechat': 'primary',
+        'codepay_qq': 'info',
+        'paypal': 'warning',
+        'stripe': 'success',
+        'bank_transfer': 'info'
       }
       return typeMap[type] || 'info'
     }

@@ -40,6 +40,9 @@ PAYMENT_METHOD_NAMES = {
     "yipay": "易支付",
     "yipay_alipay": "易支付-支付宝",
     "yipay_wxpay": "易支付-微信",
+    "codepay_alipay": "码支付-支付宝",
+    "codepay_wechat": "码支付-微信",
+    "codepay_qq": "码支付-QQ钱包",
     "wechat": "微信支付",
     "paypal": "PayPal",
     "stripe": "Stripe",
@@ -238,6 +241,9 @@ class PaymentService:
                 "yipay": self._create_yipay_payment,
                 "yipay_alipay": self._create_yipay_payment,
                 "yipay_wxpay": self._create_yipay_payment,
+                "codepay_alipay": self._create_codepay_payment,
+                "codepay_wechat": self._create_codepay_payment,
+                "codepay_qq": self._create_codepay_payment,
                 "wechat": self._create_wechat_payment,
                 "paypal": self._create_paypal_payment,
                 "stripe": self._create_stripe_payment,
@@ -536,10 +542,110 @@ class PaymentService:
         return self._create_payment_with_error_handle(request, "微信", lambda: self._create_simple_payment(request, "WX", "weixin://wxpay/bizpayurl?pr={transaction_id}"))
 
     def _create_paypal_payment(self, config: Dict[str, Any], request: PaymentCreate, currency: str) -> PaymentResponse:
-        return self._create_payment_with_error_handle(request, "PayPal", lambda: self._create_simple_payment(request, "PP", "https://www.paypal.com/paypalme/{transaction_id}"))
+        try:
+            transaction_id = request.order_no
+            if config and config.get('paypal_client_id') and config.get('paypal_secret'):
+                return self._create_real_paypal_payment(config, request, currency, transaction_id)
+            else:
+                return self._create_failed_response(request, "PayPal配置不完整，请联系管理员配置真实的PayPal密钥")
+        except Exception as e:
+            logger.error(f"PayPal支付创建失败: {str(e)}", exc_info=True)
+            return self._create_failed_response(request, f"PayPal支付创建失败: {str(e)}")
+
+    def _create_real_paypal_payment(self, config: Dict[str, Any], request: PaymentCreate, currency: str, transaction_id: str) -> PaymentResponse:
+        try:
+            from app.payments.paypal import PaypalPayment
+            from app.contracts.payment_interface import PaymentRequest
+            base_url = get_domain_config().get_base_url(None, self.db)
+            base_url = self._normalize_url(base_url)
+            notify_url = self._normalize_url(
+                config.get('notify_url') or f"{base_url}/api/v1/payment/notify/paypal"
+            )
+            return_url = self._normalize_url(
+                config.get('return_url') or f"{base_url}/payment/success"
+            )
+            paypal_config = {
+                'paypal_client_id': config.get('paypal_client_id', ''),
+                'paypal_secret': config.get('paypal_secret', ''),
+                'paypal_mode': config.get('paypal_mode', 'sandbox'),
+                'notify_url': notify_url,
+                'return_url': return_url
+            }
+            paypal_payment = PaypalPayment(paypal_config)
+            payment_request = PaymentRequest(
+                trade_no=transaction_id,
+                total_amount=int(request.amount * 100),
+                subject=f"CBoard套餐购买-{request.order_no}",
+                body=f"订单号：{request.order_no}",
+                notify_url=notify_url,
+                return_url=return_url,
+                user_id=0
+            )
+            payment_response = paypal_payment.pay(payment_request)
+            return self._create_payment_response(request, payment_response.data, transaction_id)
+        except Exception as e:
+            logger.error(f"PayPal支付创建失败: {str(e)}", exc_info=True)
+            return self._create_failed_response(request, f"PayPal支付创建失败: {str(e)}")
 
     def _create_stripe_payment(self, config: Dict[str, Any], request: PaymentCreate, currency: str) -> PaymentResponse:
         return self._create_payment_with_error_handle(request, "Stripe", lambda: self._create_simple_payment(request, "ST", "https://checkout.stripe.com/pay/{transaction_id}"))
+
+    def _create_codepay_payment(self, config: Dict[str, Any], request: PaymentCreate, currency: str) -> PaymentResponse:
+        try:
+            transaction_id = request.order_no
+            if config and config.get('codepay_id') and config.get('codepay_token'):
+                return self._create_real_codepay_payment(config, request, currency, transaction_id)
+            else:
+                return self._create_failed_response(request, "码支付配置不完整，请联系管理员配置真实的码支付密钥")
+        except Exception as e:
+            logger.error(f"码支付创建失败: {str(e)}", exc_info=True)
+            return self._create_failed_response(request, f"码支付创建失败: {str(e)}")
+
+    def _create_real_codepay_payment(self, config: Dict[str, Any], request: PaymentCreate, currency: str, transaction_id: str) -> PaymentResponse:
+        try:
+            from app.payments.codepay import CodepayPayment
+            from app.contracts.payment_interface import PaymentRequest
+            base_url = get_domain_config().get_base_url(None, self.db)
+            base_url = self._normalize_url(base_url)
+            payment_type = request.payment_method
+            # 根据支付方式确定码支付类型
+            if payment_type == 'codepay_alipay':
+                codepay_type = '1'
+            elif payment_type == 'codepay_wechat':
+                codepay_type = '3'
+            elif payment_type == 'codepay_qq':
+                codepay_type = '2'
+            else:
+                codepay_type = config.get('codepay_type', '1')
+            notify_url = self._normalize_url(
+                config.get('notify_url') or f"{base_url}/api/v1/payment/notify/codepay"
+            )
+            return_url = self._normalize_url(
+                config.get('return_url') or f"{base_url}/payment/success"
+            )
+            codepay_config = {
+                'codepay_id': config.get('codepay_id', ''),
+                'codepay_token': config.get('codepay_token', ''),
+                'codepay_type': codepay_type,
+                'codepay_gateway': config.get('codepay_gateway', 'https://api.xiuxiu888.com/creat_order'),
+                'notify_url': notify_url,
+                'return_url': return_url
+            }
+            codepay_payment = CodepayPayment(codepay_config)
+            payment_request = PaymentRequest(
+                trade_no=transaction_id,
+                total_amount=int(request.amount * 100),
+                subject=f"CBoard套餐购买-{request.order_no}",
+                body=f"订单号：{request.order_no}",
+                notify_url=notify_url,
+                return_url=return_url,
+                user_id=0
+            )
+            payment_response = codepay_payment.pay(payment_request)
+            return self._create_payment_response(request, payment_response.data, transaction_id)
+        except Exception as e:
+            logger.error(f"码支付创建失败: {str(e)}", exc_info=True)
+            return self._create_failed_response(request, f"码支付创建失败: {str(e)}")
 
     def _create_bank_transfer_payment(self, config: Dict[str, Any], request: PaymentCreate, currency: str) -> PaymentResponse:
         def _create():
@@ -576,7 +682,13 @@ class PaymentService:
             verifiers = {
                 'alipay': self._verify_alipay_notify,
                 'yipay': self._verify_yipay_notify,
-                'wechat': self._verify_wechat_notify
+                'yipay_alipay': self._verify_yipay_notify,
+                'yipay_wxpay': self._verify_yipay_notify,
+                'codepay_alipay': self._verify_codepay_notify,
+                'codepay_wechat': self._verify_codepay_notify,
+                'codepay_qq': self._verify_codepay_notify,
+                'wechat': self._verify_wechat_notify,
+                'paypal': self._verify_paypal_notify
             }
             verifier = verifiers.get(payment_method)
             return verifier(params) if verifier else None
@@ -639,6 +751,64 @@ class PaymentService:
 
     def _verify_wechat_notify(self, params: dict):
         return None
+
+    def _verify_codepay_notify(self, params: dict):
+        try:
+            from app.payments.codepay import CodepayPayment
+            # 查找码支付配置（支持所有码支付类型）
+            payment_config = self.db.query(PaymentConfig).filter(
+                PaymentConfig.pay_type.in_(['codepay_alipay', 'codepay_wechat', 'codepay_qq']),
+                PaymentConfig.status == 1
+            ).first()
+            if not payment_config:
+                logger.warning("未找到码支付配置")
+                return None
+            config_dict = payment_config.get_config()
+            codepay_config = {
+                'codepay_id': config_dict.get('codepay_id', ''),
+                'codepay_token': config_dict.get('codepay_token', ''),
+                'codepay_type': config_dict.get('codepay_type', '1'),
+                'codepay_gateway': config_dict.get('codepay_gateway', 'https://api.xiuxiu888.com/creat_order')
+            }
+            codepay_payment = CodepayPayment(codepay_config)
+            notify = codepay_payment.verify_notify(params)
+            if notify:
+                logger.info(f"码支付回调验证成功: 订单号={notify.trade_no}, 交易号={notify.callback_no}")
+                return notify
+            else:
+                logger.warning("码支付回调验证失败")
+                return None
+        except Exception as e:
+            logger.error(f"验证码支付回调失败: {str(e)}", exc_info=True)
+            return None
+
+    def _verify_paypal_notify(self, params: dict):
+        try:
+            from app.payments.paypal import PaypalPayment
+            payment_config = self.db.query(PaymentConfig).filter(
+                PaymentConfig.pay_type == 'paypal',
+                PaymentConfig.status == 1
+            ).first()
+            if not payment_config:
+                logger.warning("未找到PayPal配置")
+                return None
+            config_dict = payment_config.get_config()
+            paypal_config = {
+                'paypal_client_id': config_dict.get('paypal_client_id', ''),
+                'paypal_secret': config_dict.get('paypal_secret', ''),
+                'paypal_mode': config_dict.get('paypal_mode', 'sandbox')
+            }
+            paypal_payment = PaypalPayment(paypal_config)
+            notify = paypal_payment.verify_notify(params)
+            if notify:
+                logger.info(f"PayPal回调验证成功: 订单号={notify.trade_no}, 交易号={notify.callback_no}")
+                return notify
+            else:
+                logger.warning("PayPal回调验证失败")
+                return None
+        except Exception as e:
+            logger.error(f"验证PayPal回调失败: {str(e)}", exc_info=True)
+            return None
 
     def _generate_sign(self, params: Dict[str, Any], key: str, sign_type: str = 'md5', exclude_key: str = 'sign') -> str:
         sign_string = "&".join([f"{k}={v}" for k, v in sorted(params.items()) if k != exclude_key])
