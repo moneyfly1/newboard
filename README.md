@@ -16,7 +16,6 @@
 - [支付配置](#支付配置)
   - [支付宝配置](#支付宝配置)
   - [常见支付问题](#常见支付问题)
-- [Nginx配置详解（支付回调专用）](#nginx配置详解支付回调专用)
 - [Redis 缓存配置](#redis-缓存配置)
 - [常见问题](#常见问题)
 - [维护和管理](#维护和管理)
@@ -178,7 +177,7 @@ chmod +x install.sh
 
 脚本会自动完成：
 - ✅ **自动配置 `.env` 文件**（DOMAIN、BASE_URL、SSL_ENABLED等）
-- ✅ **自动生成Nginx配置文件**（包含API反向代理、支付回调、SPA路由等）
+- ✅ **自动生成Nginx配置文件**（包含前端静态文件、SPA路由等）
 - ✅ **自动检测宝塔面板**，并提供配置指导
 - ✅ **自动安装Nginx配置**（标准Nginx环境）
 - ✅ **支持Certbot自动申请SSL证书**（可选）
@@ -196,9 +195,7 @@ chmod +x install.sh
 - 支持Certbot自动申请SSL证书
 
 **生成的Nginx配置包含**：
-- ✅ API反向代理（`/api/`）
-- ✅ 支付回调特殊配置（`/api/v1/payment/notify/`）
-- ✅ 兼容路由（`/notify`）
+- ✅ 前端静态文件目录配置
 - ✅ 前端SPA路由（伪静态）
 - ✅ 静态资源缓存
 - ✅ SSL配置（如果使用HTTPS）
@@ -222,7 +219,7 @@ chmod +x install.sh
 - **选项2：配置域名和Nginx** ⭐ **推荐**
   - **一键配置域名和Nginx**，无需手动操作
   - 自动配置`.env`文件
-  - 自动生成并安装Nginx配置
+  - 自动生成并安装Nginx配置（前端静态文件配置）
   - 支持宝塔面板和标准Nginx环境
   - 支持Certbot自动申请SSL证书
 
@@ -469,25 +466,14 @@ sudo systemctl status cboard
    - PHP版本：**纯静态**
    - 点击 **确定**
 
-2. **配置反向代理**
-   - 网站 → `YOUR_DOMAIN` → **设置** → **反向代理**
-   - 点击 **添加反向代理**
-   - 配置：
-     - **代理名称**：`api`
-     - **代理目录**：`/api/`
-     - **目标URL**：`http://127.0.0.1:8000`（⚠️ 不要带斜杠）
-     - **发送域名**：`$host`
-     - **超时时间**：60秒
-   - 点击 **提交**
-
-3. **配置SSL证书**
+2. **配置SSL证书**
    - 网站 → `YOUR_DOMAIN` → **设置** → **SSL**
    - 选择 **Let's Encrypt**
    - 填写邮箱地址
    - 如果HTTP验证失败，选择 **DNS验证**
    - 申请成功后，开启 **强制HTTPS**
 
-4. **配置伪静态（SPA路由）**
+3. **配置伪静态（SPA路由）**
    - 网站 → `YOUR_DOMAIN` → **设置** → **伪静态**
    - 添加以下规则：
      ```nginx
@@ -497,16 +483,36 @@ sudo systemctl status cboard
      ```
    - 点击 **保存**
 
-5. **手动编辑配置文件（推荐，包含支付回调配置）**
-   - 网站 → `YOUR_DOMAIN` → **设置** → **配置文件**
-   - 点击 **编辑** 按钮
-   - 参考下方的[完整Nginx配置示例](#完整nginx配置示例)，复制配置内容（记得替换域名和路径）
-   - 点击 **保存**
-   - 点击 **重载配置**
-
 #### 使用标准Nginx配置
 
-参考下方的[Nginx配置详解](#nginx配置详解支付回调专用)章节，包含完整的配置示例和说明。
+如果使用标准Nginx，只需配置前端静态文件目录和SPA路由：
+
+```nginx
+server {
+    listen 80;
+    listen 443 ssl http2;
+    server_name YOUR_DOMAIN;
+    
+    # SSL证书配置
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+    
+    # 前端静态文件目录
+    root /path/to/frontend/dist;
+    index index.html;
+    
+    # 前端SPA路由（伪静态）
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+    
+    # 静态资源缓存
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+}
+```
 
 ### 第十步：验证部署
 
@@ -658,280 +664,6 @@ tail -f uploads/logs/payment.log
 
 ---
 
-## Nginx配置详解（支付回调专用）
-
-### 重要提示
-
-⚠️ **支付回调配置必须在伪静态之前！** Nginx会按照配置顺序匹配，如果伪静态在前，会拦截支付回调请求。
-
-### 完整Nginx配置示例
-
-以下是完整的Nginx虚拟主机配置（将 `YOUR_DOMAIN` 替换为您的实际域名）：
-
-```nginx
-server {
-    listen 80;
-    listen 443 ssl http2;
-    server_name YOUR_DOMAIN;
-    
-    # SSL证书配置（请根据实际情况修改路径）
-    # 如果使用宝塔面板，通常路径是：
-    ssl_certificate /www/server/panel/vhost/cert/YOUR_DOMAIN/fullchain.pem;
-    ssl_certificate_key /www/server/panel/vhost/cert/YOUR_DOMAIN/privkey.pem;
-    
-    # SSL配置
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE:ECDH:AES:HIGH:!NULL:!aNULL:!MD5:!ADH:!RC4;
-    ssl_prefer_server_ciphers on;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
-    
-    # 前端静态文件目录（请根据实际情况修改路径）
-    root /www/wwwroot/YOUR_DOMAIN/frontend/dist;
-    index index.html;
-    
-    # ⚠️ 关键：API反向代理（必须在伪静态之前！）
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # 支付宝回调需要较长的超时时间
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        
-        # 禁用缓冲，确保POST数据不丢失（支付宝回调是POST请求）
-        proxy_buffering off;
-        proxy_request_buffering off;
-        
-        # 支持POST请求
-        proxy_http_version 1.1;
-    }
-    
-    # ⚠️ 支付回调特殊配置（更具体的匹配，会优先于 /api/）
-    location /api/v1/payment/notify/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # 支付宝回调特殊配置
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        
-        # 禁用缓冲
-        proxy_buffering off;
-        proxy_request_buffering off;
-        
-        # 支持POST请求
-        proxy_http_version 1.1;
-        
-        # 记录日志（用于调试）
-        access_log /www/wwwlogs/alipay_notify.log;
-        error_log /www/wwwlogs/alipay_notify_error.log;
-    }
-    
-    # 兼容路由：/notify（如果支付宝配置的是这个地址）
-    location = /notify {
-        proxy_pass http://127.0.0.1:8000/notify;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        
-        proxy_http_version 1.1;
-        proxy_buffering off;
-        proxy_request_buffering off;
-        
-        access_log /www/wwwlogs/alipay_notify.log;
-    }
-    
-    # 前端SPA路由（伪静态，必须在最后）
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-    
-    # 静态资源缓存
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-    
-    # 禁止访问隐藏文件
-    location ~ /\. {
-        deny all;
-        access_log off;
-        log_not_found off;
-    }
-}
-```
-
-### 配置说明
-
-#### 1. API反向代理配置
-
-```nginx
-location /api/ {
-    proxy_pass http://127.0.0.1:8000;
-    # ... 其他配置 ...
-}
-```
-
-**关键点**：
-- ✅ `proxy_pass` 后面**不要带斜杠**（如果location带斜杠）
-- ✅ 必须设置 `proxy_buffering off` 和 `proxy_request_buffering off`，确保POST数据不丢失
-- ✅ 超时时间设置为60秒，避免支付宝回调超时
-
-#### 2. 支付回调特殊配置
-
-```nginx
-location /api/v1/payment/notify/ {
-    # ... 配置 ...
-}
-```
-
-**为什么需要单独配置？**
-- 更具体的匹配规则会优先于 `/api/`
-- 可以单独设置日志记录，方便调试
-- 可以单独设置超时时间
-
-#### 3. 兼容路由
-
-```nginx
-location = /notify {
-    proxy_pass http://127.0.0.1:8000/notify;
-    # ... 配置 ...
-}
-```
-
-**用途**：如果支付宝配置的是 `/notify` 而不是 `/api/v1/payment/notify/alipay`，这个路由会转发到后端的兼容处理函数。
-
-### 使用宝塔面板配置
-
-如果您使用宝塔面板，可以按以下步骤配置：
-
-1. **登录宝塔面板**
-   - 访问宝塔面板地址
-   - 使用管理员账号登录
-
-2. **配置反向代理**
-   - 网站 → 找到您的域名 → **设置** → **反向代理**
-   - 点击 **添加反向代理**
-   - 配置：
-     - **代理名称**：`api`
-     - **代理目录**：`/api/`
-     - **目标URL**：`http://127.0.0.1:8000`（⚠️ 不要带斜杠）
-     - **发送域名**：`$host`
-     - **超时时间**：60秒
-   - 点击 **提交**
-
-3. **配置伪静态**
-   - 网站 → 您的域名 → **设置** → **伪静态**
-   - 添加以下规则：
-     ```nginx
-     location / {
-         try_files $uri $uri/ /index.html;
-     }
-     ```
-   - 点击 **保存**
-
-4. **手动编辑配置文件（推荐）**
-   - 网站 → 您的域名 → **设置** → **配置文件**
-   - 点击 **编辑** 按钮
-   - 将上面的完整配置示例复制进去（记得替换域名和路径）
-   - 点击 **保存**
-   - 点击 **重载配置**
-
-### 验证Nginx配置
-
-#### 1. 检查配置语法
-
-```bash
-nginx -t
-```
-
-如果显示 `syntax is ok` 和 `test is successful`，说明配置正确。
-
-#### 2. 测试回调URL
-
-```bash
-# 从服务器本地测试
-curl -X POST http://127.0.0.1:8000/api/v1/payment/notify/alipay \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "test=1"
-
-# 从外网测试（需要替换为您的实际域名）
-curl -X POST https://YOUR_DOMAIN/api/v1/payment/notify/alipay \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "test=1"
-```
-
-#### 3. 查看日志
-
-```bash
-# 查看支付回调日志（如果配置了）
-tail -f /www/wwwlogs/alipay_notify.log
-
-# 查看Nginx访问日志
-tail -f /www/wwwlogs/access.log | grep notify
-
-# 查看后端日志
-journalctl -u cboard -f | grep -i "notify\|alipay"
-```
-
-### 常见Nginx配置问题
-
-#### 问题1：Nginx返回404
-
-**原因**：`proxy_pass` 配置不正确
-
-**解决方案**：
-- 确保 `proxy_pass` 后面**不要带斜杠**（如果location带斜杠）
-- 例如：`location /api/ { proxy_pass http://127.0.0.1:8000; }`
-
-#### 问题2：Nginx返回502 Bad Gateway
-
-**原因**：后端服务未运行或端口不正确
-
-**解决方案**：
-```bash
-# 检查后端服务是否运行
-systemctl status cboard
-
-# 检查端口是否监听
-netstat -tlnp | grep 8000
-
-# 测试后端是否响应
-curl http://127.0.0.1:8000/health
-```
-
-#### 问题3：回调参数丢失
-
-**原因**：Nginx缓冲导致POST数据丢失
-
-**解决方案**：
-```nginx
-proxy_buffering off;
-proxy_request_buffering off;
-```
-
-#### 问题4：回调超时
-
-**原因**：Nginx超时设置太短
-
-**解决方案**：增加超时时间（参考上面的配置）
-
----
-
 ## 常见问题
 
 ### 1. Python虚拟环境创建失败
@@ -994,16 +726,17 @@ location / {
 
 ### 4. API请求返回404或502
 
-**检查反向代理配置**:
+**检查后端服务**:
 ```bash
-# 查看Nginx配置
-cat /www/server/panel/vhost/nginx/YOUR_DOMAIN.conf | grep -A 10 "location /api/"
-```
+# 检查后端服务是否运行
+systemctl status cboard
 
-确保配置正确：
-- 代理目录：`/api/`
-- 目标URL：`http://127.0.0.1:8000`（不要带斜杠）
-- 发送域名：`$host`
+# 检查端口是否监听
+netstat -tlnp | grep 8000
+
+# 测试后端是否响应
+curl http://127.0.0.1:8000/health
+```
 
 ### 5. SSL证书申请失败
 

@@ -617,72 +617,7 @@ configure_domain_nginx() {
     root $FRONTEND_DIR;
     index index.html;
     
-    # ⚠️ 关键：API反向代理（必须在伪静态之前！）
-    location /api/ {
-        proxy_pass http://127.0.0.1:$BACKEND_PORT;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        # 支付宝回调需要较长的超时时间
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        
-        # 禁用缓冲，确保POST数据不丢失（支付宝回调是POST请求）
-        proxy_buffering off;
-        proxy_request_buffering off;
-        
-        # 支持POST请求
-        proxy_http_version 1.1;
-    }
-    
-    # ⚠️ 支付回调特殊配置（更具体的匹配，会优先于 /api/）
-    location /api/v1/payment/notify/ {
-        proxy_pass http://127.0.0.1:$BACKEND_PORT;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        # 支付宝回调特殊配置
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        
-        # 禁用缓冲
-        proxy_buffering off;
-        proxy_request_buffering off;
-        
-        # 支持POST请求
-        proxy_http_version 1.1;
-        
-        # 记录日志（用于调试）
-        access_log $LOG_DIR/alipay_notify.log;
-        error_log $LOG_DIR/alipay_notify_error.log;
-    }
-    
-    # 兼容路由：/notify（如果支付宝配置的是这个地址）
-    location = /notify {
-        proxy_pass http://127.0.0.1:$BACKEND_PORT/notify;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        
-        proxy_http_version 1.1;
-        proxy_buffering off;
-        proxy_request_buffering off;
-        
-        access_log $LOG_DIR/alipay_notify.log;
-    }
-    
-    # 前端SPA路由（伪静态，必须在最后）
+    # 前端SPA路由（伪静态）
     location / {
         try_files \$uri \$uri/ /index.html;
     }
