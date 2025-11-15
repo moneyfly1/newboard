@@ -297,14 +297,24 @@ class YipayPayment(PaymentInterface):
             # 4. 处理私钥格式
             private_key_str = self.private_key.strip()
             
+            # 检查是否是公钥（用户可能误填了公钥）
+            if 'BEGIN PUBLIC KEY' in private_key_str or 'END PUBLIC KEY' in private_key_str:
+                raise Exception("检测到您填写的是公钥而不是私钥！请填写商户私钥（在易支付后台点击'生成商户RSA密钥对'后显示的私钥，包含 BEGIN RSA PRIVATE KEY 和 END RSA PRIVATE KEY）")
+            
             # 如果私钥已经是完整的PEM格式，直接使用
             if private_key_str.startswith('-----BEGIN'):
                 # 已经是PEM格式，确保换行符正确
                 private_key_str = private_key_str.replace('\r\n', '\n').replace('\r', '\n')
+                # 确保包含PRIVATE KEY而不是PUBLIC KEY
+                if 'PUBLIC KEY' in private_key_str and 'PRIVATE KEY' not in private_key_str:
+                    raise Exception("检测到您填写的是公钥而不是私钥！请填写商户私钥（在易支付后台点击'生成商户RSA密钥对'后显示的私钥）")
             else:
                 # 如果没有PEM头，添加PKCS1格式的PEM头
                 # 移除所有换行符和空格，然后每64个字符换行
                 clean_key = ''.join(private_key_str.split())
+                # 检查长度，私钥通常比公钥长
+                if len(clean_key) < 800:
+                    payment_logger.warning(f"⚠️ 私钥长度较短（{len(clean_key)}字符），可能是公钥或格式错误")
                 formatted_key = '\n'.join([clean_key[i:i+64] for i in range(0, len(clean_key), 64)])
                 private_key_str = f"-----BEGIN RSA PRIVATE KEY-----\n{formatted_key}\n-----END RSA PRIVATE KEY-----"
             
@@ -315,25 +325,61 @@ class YipayPayment(PaymentInterface):
             # 尝试1: 直接导入（可能是PKCS1或PKCS8）
             try:
                 private_key = RSA.import_key(private_key_str)
+                payment_logger.debug("✅ 私钥加载成功（直接导入）")
             except ValueError as e:
                 last_error = e
+                payment_logger.debug(f"⚠️ 直接导入失败: {str(e)}")
+                
                 # 尝试2: 如果是PKCS1格式，尝试转换为PKCS8
                 if 'BEGIN RSA PRIVATE KEY' in private_key_str:
                     try:
                         pkcs8_key = private_key_str.replace('BEGIN RSA PRIVATE KEY', 'BEGIN PRIVATE KEY').replace('END RSA PRIVATE KEY', 'END PRIVATE KEY')
                         private_key = RSA.import_key(pkcs8_key)
+                        payment_logger.debug("✅ 私钥加载成功（PKCS1转PKCS8）")
                     except ValueError as e2:
                         last_error = e2
+                        payment_logger.debug(f"⚠️ PKCS1转PKCS8失败: {str(e2)}")
+                        
                         # 尝试3: 如果是PKCS8格式，尝试转换为PKCS1
                         if 'BEGIN PRIVATE KEY' in private_key_str:
                             try:
                                 pkcs1_key = private_key_str.replace('BEGIN PRIVATE KEY', 'BEGIN RSA PRIVATE KEY').replace('END PRIVATE KEY', 'END RSA PRIVATE KEY')
                                 private_key = RSA.import_key(pkcs1_key)
+                                payment_logger.debug("✅ 私钥加载成功（PKCS8转PKCS1）")
                             except ValueError as e3:
                                 last_error = e3
+                                payment_logger.debug(f"⚠️ PKCS8转PKCS1失败: {str(e3)}")
+                
+                # 尝试4: 如果还是失败，尝试使用cryptography库（如果可用）
+                if private_key is None:
+                    try:
+                        from cryptography.hazmat.primitives import serialization
+                        from cryptography.hazmat.backends import default_backend
+                        import io
+                        
+                        # 尝试使用cryptography库加载
+                        try:
+                            # 尝试PKCS1格式
+                            pem_data = private_key_str.encode('utf-8')
+                            private_key_obj = serialization.load_pem_private_key(pem_data, password=None, backend=default_backend())
+                            # 转换为pycryptodome格式
+                            private_key_der = private_key_obj.private_bytes(
+                                encoding=serialization.Encoding.DER,
+                                format=serialization.PrivateFormat.PKCS8,
+                                encryption_algorithm=serialization.NoEncryption()
+                            )
+                            private_key = RSA.import_key(private_key_der)
+                            payment_logger.debug("✅ 私钥加载成功（使用cryptography库）")
+                        except Exception as crypto_e:
+                            payment_logger.debug(f"⚠️ cryptography库加载失败: {str(crypto_e)}")
+                    except ImportError:
+                        payment_logger.debug("⚠️ cryptography库未安装，跳过此方法")
             
             if private_key is None:
-                raise Exception(f"无法加载私钥: {str(last_error)}")
+                error_msg = f"无法加载私钥: {str(last_error)}"
+                payment_logger.error(f"❌ {error_msg}")
+                payment_logger.error(f"私钥前100个字符: {private_key_str[:100]}")
+                raise Exception(error_msg)
             
             # 6. 使用SHA256WithRSA签名
             h = SHA256.new(sign_string.encode('utf-8'))

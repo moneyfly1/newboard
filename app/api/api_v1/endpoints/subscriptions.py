@@ -213,7 +213,10 @@ def get_user_devices(
             })
         return ResponseBase(data={"devices": device_list})
     except Exception as e:
-        return ResponseBase(data={"devices": []})
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"获取用户设备列表失败: {str(e)}", exc_info=True)
+        return ResponseBase(success=False, message=f"获取设备列表失败: {str(e)}", data={"devices": []})
 
 @router.delete("/devices/{device_id}", response_model=ResponseBase)
 def remove_device(

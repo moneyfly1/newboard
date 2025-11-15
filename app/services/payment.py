@@ -520,7 +520,18 @@ class PaymentService:
                 user_id=0
             )
             payment_response = yipay_payment.pay(payment_request)
-            return self._create_payment_response(request, payment_response.data, transaction_id)
+            
+            # 易支付返回的PaymentResponse包含type字段（0=二维码，1=跳转URL）
+            # 需要根据type决定如何处理
+            if payment_response.type == 0:
+                # 二维码类型，data是二维码内容（可能是URL或base64图片）
+                qr_code_url = payment_response.data
+                # 如果是URL，直接返回；如果是base64，也返回（前端会处理）
+                return self._create_payment_response(request, qr_code_url, transaction_id)
+            else:
+                # 跳转URL类型，data是跳转URL
+                jump_url = payment_response.data
+                return self._create_payment_response(request, jump_url, transaction_id)
         except Exception as e:
             logger.error(f"易支付创建失败: {str(e)}", exc_info=True)
             return self._create_failed_response(request, f"易支付创建失败: {str(e)}")

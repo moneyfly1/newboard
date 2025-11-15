@@ -226,12 +226,20 @@ export default {
       loading.value = true
       try {
         const response = await subscriptionAPI.getDevices()
+        console.log('设备列表API响应:', response)
+        
         // 检查响应结构
         if (response && response.data) {
           const responseData = response.data
           
           // 处理多种可能的响应格式
-          if (responseData.success !== false && responseData.data) {
+          if (responseData.success === false) {
+            // 如果明确返回失败
+            const errorMsg = responseData.message || '获取设备列表失败'
+            ElMessage.error(errorMsg)
+            devices.value = []
+          } else if (responseData.data) {
+            // 标准格式：{ success: true, data: { devices: [...] } }
             if (responseData.data.devices && Array.isArray(responseData.data.devices)) {
               devices.value = responseData.data.devices
             } else if (Array.isArray(responseData.data)) {
@@ -239,17 +247,22 @@ export default {
             } else {
               devices.value = []
             }
+          } else if (Array.isArray(responseData)) {
+            // 直接返回数组格式
+            devices.value = responseData
           } else {
             devices.value = []
-            }
+          }
         } else {
           devices.value = []
-          }
+        }
         
         // 计算统计数据
         updateDeviceStats()
       } catch (error) {
-        ElMessage.error('获取设备列表失败: ' + (error.response?.data?.message || error.message || '未知错误'))
+        console.error('获取设备列表错误:', error)
+        const errorMsg = error.response?.data?.message || error.response?.data?.detail || error.message || '未知错误'
+        ElMessage.error('获取设备列表失败: ' + errorMsg)
         devices.value = []
         updateDeviceStats()
       } finally {
@@ -353,9 +366,15 @@ export default {
     // 检查是否在线（24小时内访问过）
     const isOnline = (lastAccess) => {
       if (!lastAccess) return false
-      const lastTime = dayjs(lastAccess)
-      const now = dayjs()
-      return now.diff(lastTime, 'hour') < 24
+      try {
+        // 使用formatDateTime返回的字符串格式，需要解析
+        const lastTime = new Date(lastAccess)
+        const now = new Date()
+        const diffHours = (now - lastTime) / (1000 * 60 * 60)
+        return diffHours < 24
+      } catch (e) {
+        return false
+      }
     }
 
     // 计算百分比
