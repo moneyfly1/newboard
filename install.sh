@@ -11,6 +11,78 @@ NC='\033[0m'
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_PATH="$SCRIPT_DIR"
 BACKEND_PORT=8000
+LOCK_FILE="/tmp/cboard_install.lock"
+
+# 清理函数
+cleanup() {
+    rm -f "$LOCK_FILE"
+}
+trap cleanup EXIT
+
+# 检查并发运行
+check_concurrent() {
+    if [ -f "$LOCK_FILE" ]; then
+        LOCK_PID=$(cat "$LOCK_FILE" 2>/dev/null)
+        if [ -n "$LOCK_PID" ] && ps -p "$LOCK_PID" > /dev/null 2>&1; then
+            echo -e "${RED}❌ 安装脚本正在运行中（PID: $LOCK_PID）${NC}"
+            echo -e "${YELLOW}   如果确定没有其他实例在运行，请删除锁文件: rm -f $LOCK_FILE${NC}"
+            exit 1
+        else
+            rm -f "$LOCK_FILE"
+        fi
+    fi
+    echo $$ > "$LOCK_FILE"
+}
+
+# 安全释放端口
+safe_release_port() {
+    local port=$1
+    echo -e "${YELLOW}   检查端口 $port 占用情况...${NC}"
+    
+    # 先尝试正常停止服务
+    if systemctl is-active --quiet cboard 2>/dev/null; then
+        echo -e "${YELLOW}   正在正常停止cboard服务...${NC}"
+        systemctl stop cboard 2>/dev/null || true
+        sleep 3
+    fi
+    
+    # 检查是否还有进程占用端口
+    local PID=""
+    if command -v lsof &> /dev/null; then
+        PID=$(lsof -ti:$port 2>/dev/null | head -1)
+    elif command -v fuser &> /dev/null; then
+        PID=$(fuser $port/tcp 2>/dev/null | awk '{print $1}' | head -1)
+    elif command -v netstat &> /dev/null; then
+        PID=$(netstat -tlnp 2>/dev/null | grep ":$port " | awk '{print $7}' | cut -d'/' -f1 | head -1)
+        [ "$PID" = "-" ] && PID=""
+    fi
+    
+    if [ -n "$PID" ] && [ "$PID" != "$$" ]; then
+        echo -e "${YELLOW}   发现端口 $port 被占用 (PID: $PID)，正在释放...${NC}"
+        
+        # 先尝试SIGTERM正常终止
+        if kill -0 "$PID" 2>/dev/null; then
+            kill "$PID" 2>/dev/null || true
+            sleep 2
+            
+            # 如果还在运行，再使用SIGKILL
+            if kill -0 "$PID" 2>/dev/null; then
+                echo -e "${YELLOW}   进程未响应，强制终止...${NC}"
+                kill -9 "$PID" 2>/dev/null || true
+                sleep 1
+            fi
+        fi
+    fi
+    
+    # 最终验证
+    if command -v lsof &> /dev/null; then
+        if lsof -ti:$port &>/dev/null; then
+            echo -e "${YELLOW}   ⚠️ 端口 $port 可能仍被占用，请手动检查${NC}"
+        else
+            echo -e "${GREEN}   ✅ 端口 $port 已释放${NC}"
+        fi
+    fi
+}
 
 show_menu() {
     clear
@@ -149,7 +221,10 @@ install_system() {
     get_admin_info
     echo -e "${GREEN}✅ 管理员信息已收集${NC}\n"
     
-    cd "$PROJECT_PATH"
+    cd "$PROJECT_PATH" || {
+        echo -e "${RED}❌ 无法进入项目目录: $PROJECT_PATH${NC}"
+        return 1
+    }
     
     install_redis
     echo ""
@@ -275,7 +350,10 @@ install_system() {
     fi
     
     echo -e "${YELLOW}📦 安装前端依赖...${NC}"
-    cd frontend
+    cd frontend || {
+        echo -e "${RED}❌ 无法进入frontend目录${NC}"
+        return 1
+    }
     npm config set registry https://registry.npmmirror.com
     
     # npm install 最多重试2次
@@ -284,7 +362,7 @@ install_system() {
         sleep 3
         if ! npm install --silent; then
             echo -e "${RED}❌ 前端依赖安装失败，请检查网络连接${NC}"
-            cd "$PROJECT_PATH"
+            cd "$PROJECT_PATH" || true
             return 1
         fi
     fi
@@ -293,12 +371,15 @@ install_system() {
     export NODE_OPTIONS="--max-old-space-size=4096"
     if ! npm run build; then
         echo -e "${RED}❌ 前端构建失败，请检查错误信息${NC}"
-        cd "$PROJECT_PATH"
+        cd "$PROJECT_PATH" || true
         return 1
     fi
     echo -e "${GREEN}✅ 前端构建完成${NC}"
     
-    cd "$PROJECT_PATH"
+    cd "$PROJECT_PATH" || {
+        echo -e "${RED}❌ 无法返回项目目录${NC}"
+        return 1
+    }
     
     if [ ! -f "$PROJECT_PATH/main.py" ]; then
         echo -e "${RED}❌ 错误：根目录必须存在 main.py 文件${NC}"
@@ -336,28 +417,8 @@ EOF
     systemctl stop cboard 2>/dev/null || true
     systemctl stop xboard 2>/dev/null || true
     
-    # 检查并释放端口 8000
-    if command -v lsof &> /dev/null; then
-        PID=$(lsof -ti:8000 2>/dev/null)
-        if [ -n "$PID" ]; then
-            echo -e "${YELLOW}   发现端口 8000 被占用 (PID: $PID)，正在释放...${NC}"
-            kill -9 $PID 2>/dev/null || true
-            sleep 2
-        fi
-    elif command -v fuser &> /dev/null; then
-        if fuser 8000/tcp &>/dev/null; then
-            echo -e "${YELLOW}   发现端口 8000 被占用，正在释放...${NC}"
-            fuser -k 8000/tcp 2>/dev/null || true
-            sleep 2
-        fi
-    elif command -v netstat &> /dev/null; then
-        PID=$(netstat -tlnp 2>/dev/null | grep ':8000 ' | awk '{print $7}' | cut -d'/' -f1 | head -1)
-        if [ -n "$PID" ] && [ "$PID" != "-" ]; then
-            echo -e "${YELLOW}   发现端口 8000 被占用 (PID: $PID)，正在释放...${NC}"
-            kill -9 $PID 2>/dev/null || true
-            sleep 2
-        fi
-    fi
+    # 安全释放端口
+    safe_release_port $BACKEND_PORT
     
     echo -e "${YELLOW}🚀 启动服务...${NC}"
     systemctl start cboard
@@ -417,7 +478,11 @@ EOF
 reset_admin_password() {
     echo -e "${BLUE}🔑 重设管理员密码${NC}\n"
     
-    cd "$PROJECT_PATH"
+    cd "$PROJECT_PATH" || {
+        echo -e "${RED}❌ 无法进入项目目录: $PROJECT_PATH${NC}"
+        read -p "按回车键继续..."
+        return 1
+    }
     
     if [ ! -d "venv" ]; then
         echo -e "${RED}❌ 虚拟环境不存在，请先安装系统${NC}"
@@ -452,7 +517,11 @@ reset_admin_password() {
 view_admin_account() {
     echo -e "${BLUE}👤 查看管理员账号${NC}\n"
     
-    cd "$PROJECT_PATH"
+    cd "$PROJECT_PATH" || {
+        echo -e "${RED}❌ 无法进入项目目录: $PROJECT_PATH${NC}"
+        read -p "按回车键继续..."
+        return 1
+    }
     
     if [ ! -d "venv" ]; then
         echo -e "${RED}❌ 虚拟环境不存在，请先安装系统${NC}"
@@ -481,7 +550,12 @@ configure_domain_nginx() {
         return 1
     fi
     
-    cd "$PROJECT_PATH"
+    cd "$PROJECT_PATH" || {
+        echo -e "${RED}❌ 无法进入项目目录: $PROJECT_PATH${NC}"
+        set -e
+        read -p "按回车键继续..."
+        return 1
+    }
     
     # 获取域名
     DOMAIN=""
@@ -495,6 +569,14 @@ configure_domain_nginx() {
     
     # 移除协议前缀
     DOMAIN=$(echo "$DOMAIN" | sed 's|^https\?://||' | sed 's|/$||')
+    
+    # 验证域名格式
+    if [[ ! "$DOMAIN" =~ ^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\.[a-zA-Z]{2,}$ ]]; then
+        echo -e "${RED}❌ 域名格式不正确，请输入有效的域名（如: example.com）${NC}"
+        set -e
+        read -p "按回车键继续..."
+        return 1
+    fi
     
     # 询问是否使用HTTPS
     USE_HTTPS=""
@@ -589,6 +671,15 @@ configure_domain_nginx() {
         FRONTEND_ROOT="/www/wwwroot/$DOMAIN/frontend/dist"
     else
         FRONTEND_ROOT="$PROJECT_PATH/frontend/dist"
+    fi
+    
+    # 检查前端目录是否存在
+    if [ ! -d "$FRONTEND_ROOT" ]; then
+        echo -e "${YELLOW}⚠️ 前端目录不存在: $FRONTEND_ROOT${NC}"
+        echo -e "${YELLOW}   请先运行选项1安装系统，构建前端项目${NC}"
+        set -e
+        read -p "按回车键继续..."
+        return 1
     fi
     
     # 生成Nginx配置内容
@@ -720,6 +811,14 @@ configure_domain_nginx() {
     
     # 保存配置文件到项目目录
     CONFIG_FILE="$PROJECT_PATH/${DOMAIN}.conf"
+    
+    # 如果配置文件已存在，先备份
+    if [ -f "$CONFIG_FILE" ]; then
+        BACKUP_FILE="${CONFIG_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
+        cp "$CONFIG_FILE" "$BACKUP_FILE"
+        echo -e "${YELLOW}⚠️ 配置文件已存在，已备份到: $BACKUP_FILE${NC}"
+    fi
+    
     echo "$NGINX_CONFIG" > "$CONFIG_FILE"
     echo -e "${GREEN}✅ Nginx配置文件已保存到: $CONFIG_FILE${NC}"
     
@@ -738,6 +837,13 @@ configure_domain_nginx() {
         # 标准Nginx安装
         if command -v nginx &> /dev/null; then
             echo -e "${YELLOW}📝 安装Nginx配置...${NC}"
+            
+            # 如果配置文件已存在，先备份
+            if [ -f "$NGINX_CONF" ]; then
+                BACKUP_FILE="${NGINX_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+                cp "$NGINX_CONF" "$BACKUP_FILE"
+                echo -e "${YELLOW}⚠️ Nginx配置文件已存在，已备份到: $BACKUP_FILE${NC}"
+            fi
             
             # 复制到sites-available
             cp "$CONFIG_FILE" "$NGINX_CONF"
@@ -815,13 +921,40 @@ start_service() {
     fi
     
     if systemctl is-active --quiet cboard; then
-        echo -e "${YELLOW}⚠️ 服务已在运行中${NC}"
+        # 验证端口是否真的在监听
+        if command -v netstat &> /dev/null; then
+            if netstat -tlnp 2>/dev/null | grep -q ":$BACKEND_PORT "; then
+                echo -e "${GREEN}✅ 服务已在运行中，端口 $BACKEND_PORT 正在监听${NC}"
+            else
+                echo -e "${YELLOW}⚠️ 服务显示运行中，但端口 $BACKEND_PORT 未监听，可能有问题${NC}"
+                echo -e "${YELLOW}   建议重启服务${NC}"
+            fi
+        else
+            echo -e "${YELLOW}⚠️ 服务已在运行中${NC}"
+        fi
     else
+        echo -e "${YELLOW}正在启动服务...${NC}"
         systemctl start cboard
-        sleep 3
+        
+        # 等待服务启动，最多等待10秒
+        local count=0
+        while ! systemctl is-active --quiet cboard && [ $count -lt 10 ]; do
+            sleep 1
+            count=$((count + 1))
+        done
         
         if systemctl is-active --quiet cboard; then
-            echo -e "${GREEN}✅ 服务启动成功${NC}"
+            # 验证端口是否真的在监听
+            sleep 2
+            if command -v netstat &> /dev/null; then
+                if netstat -tlnp 2>/dev/null | grep -q ":$BACKEND_PORT "; then
+                    echo -e "${GREEN}✅ 服务启动成功，端口 $BACKEND_PORT 正在监听${NC}"
+                else
+                    echo -e "${YELLOW}⚠️ 服务显示运行中，但端口 $BACKEND_PORT 未监听，请检查日志${NC}"
+                fi
+            else
+                echo -e "${GREEN}✅ 服务启动成功${NC}"
+            fi
         else
             echo -e "${RED}❌ 服务启动失败${NC}"
             echo -e "${YELLOW}📋 查看错误日志：${NC}"
@@ -845,13 +978,23 @@ stop_service() {
     if ! systemctl is-active --quiet cboard; then
         echo -e "${YELLOW}⚠️ 服务未运行${NC}"
     else
+        echo -e "${YELLOW}正在停止服务...${NC}"
         systemctl stop cboard
-        sleep 2
+        
+        # 等待服务停止，最多等待10秒
+        local count=0
+        while systemctl is-active --quiet cboard && [ $count -lt 10 ]; do
+            sleep 1
+            count=$((count + 1))
+        done
         
         if ! systemctl is-active --quiet cboard; then
             echo -e "${GREEN}✅ 服务已停止${NC}"
         else
-            echo -e "${RED}❌ 服务停止失败${NC}"
+            echo -e "${RED}❌ 服务停止失败或超时${NC}"
+            echo -e "${YELLOW}   尝试强制停止...${NC}"
+            systemctl kill --signal=SIGKILL cboard 2>/dev/null || true
+            sleep 2
         fi
     fi
     
@@ -868,11 +1011,28 @@ restart_service() {
         return 1
     fi
     
+    echo -e "${YELLOW}正在重启服务...${NC}"
     systemctl restart cboard
-    sleep 3
+    
+    # 等待服务启动，最多等待10秒
+    local count=0
+    while ! systemctl is-active --quiet cboard && [ $count -lt 10 ]; do
+        sleep 1
+        count=$((count + 1))
+    done
     
     if systemctl is-active --quiet cboard; then
-        echo -e "${GREEN}✅ 服务重启成功${NC}"
+        # 验证端口是否真的在监听
+        sleep 2
+        if command -v netstat &> /dev/null; then
+            if netstat -tlnp 2>/dev/null | grep -q ":$BACKEND_PORT "; then
+                echo -e "${GREEN}✅ 服务重启成功，端口 $BACKEND_PORT 正在监听${NC}"
+            else
+                echo -e "${YELLOW}⚠️ 服务显示运行中，但端口 $BACKEND_PORT 未监听，请检查日志${NC}"
+            fi
+        else
+            echo -e "${GREEN}✅ 服务重启成功${NC}"
+        fi
     else
         echo -e "${RED}❌ 服务重启失败${NC}"
         echo -e "${YELLOW}📋 查看错误日志：${NC}"
@@ -1005,7 +1165,11 @@ view_service_logs() {
 fix_common_errors() {
     echo -e "${BLUE}🔧 修复常见错误${NC}\n"
     
-    cd "$PROJECT_PATH"
+    cd "$PROJECT_PATH" || {
+        echo -e "${RED}❌ 无法进入项目目录: $PROJECT_PATH${NC}"
+        read -p "按回车键继续..."
+        return 1
+    }
     
     echo -e "${YELLOW}1. 检查Python虚拟环境...${NC}"
     if [ ! -d "venv" ]; then
@@ -1041,23 +1205,31 @@ fix_common_errors() {
     fi
     
     echo -e "${YELLOW}6. 检查端口占用...${NC}"
-    if command -v fuser &> /dev/null; then
-        if fuser 8000/tcp &>/dev/null; then
-            echo -e "${YELLOW}   端口8000被占用，正在释放...${NC}"
-            fuser -k 8000/tcp 2>/dev/null || true
-            sleep 2
-            echo -e "${GREEN}   ✅ 端口已释放${NC}"
-        else
-            echo -e "${GREEN}   ✅ 端口8000可用${NC}"
-        fi
-    fi
+    safe_release_port $BACKEND_PORT
     
     echo -e "${YELLOW}7. 重启服务...${NC}"
     if systemctl is-enabled cboard &>/dev/null; then
         systemctl restart cboard
-        sleep 3
+        
+        # 等待服务启动，最多等待10秒
+        local count=0
+        while ! systemctl is-active --quiet cboard && [ $count -lt 10 ]; do
+            sleep 1
+            count=$((count + 1))
+        done
+        
         if systemctl is-active --quiet cboard; then
-            echo -e "${GREEN}   ✅ 服务重启成功${NC}"
+            # 验证端口是否真的在监听
+            sleep 2
+            if command -v netstat &> /dev/null; then
+                if netstat -tlnp 2>/dev/null | grep -q ":$BACKEND_PORT "; then
+                    echo -e "${GREEN}   ✅ 服务重启成功，端口 $BACKEND_PORT 正在监听${NC}"
+                else
+                    echo -e "${YELLOW}   ⚠️ 服务显示运行中，但端口 $BACKEND_PORT 未监听${NC}"
+                fi
+            else
+                echo -e "${GREEN}   ✅ 服务重启成功${NC}"
+            fi
         else
             echo -e "${RED}   ❌ 服务重启失败，查看日志: journalctl -u cboard -n 50${NC}"
         fi
@@ -1072,6 +1244,9 @@ fix_common_errors() {
 }
 
 main() {
+    # 检查并发运行（仅在主程序入口检查）
+    check_concurrent
+    
     while true; do
         show_menu
         read -p "请选择操作 [0-10]: " choice
