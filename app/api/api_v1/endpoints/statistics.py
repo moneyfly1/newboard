@@ -1,8 +1,11 @@
 from typing import Any, List
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+import csv
+import io
 from app.core.database import get_db
 from app.schemas.common import ResponseBase
 from app.services.user import UserService
@@ -252,7 +255,35 @@ def export_statistics(
             for order in orders
         ]
     if format == "csv":
-        return ResponseBase(message="CSV导出功能待实现", data={"count": len(data)})
+        # 生成CSV内容
+        output = io.StringIO()
+        if data:
+            # 获取表头
+            fieldnames = list(data[0].keys())
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
+            writer.writeheader()
+            # 写入数据
+            for row in data:
+                writer.writerow(row)
+        else:
+            # 如果没有数据，至少写入表头
+            writer = csv.writer(output)
+            if type == "orders":
+                writer.writerow(["id", "order_no", "user_id", "amount", "status", "payment_method", "created_at"])
+            elif type == "users":
+                writer.writerow(["id", "username", "email", "is_verified", "is_active", "created_at"])
+            elif type == "subscriptions":
+                writer.writerow(["id", "user_id", "package_name", "status", "expire_time", "created_at"])
+        
+        csv_content = output.getvalue()
+        csv_bytes = ('\ufeff' + csv_content).encode('utf-8-sig')  # 添加BOM以支持Excel正确显示中文
+        filename = f"{type}_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        return StreamingResponse(
+            io.BytesIO(csv_bytes),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
     else:
         return ResponseBase(
             data={
