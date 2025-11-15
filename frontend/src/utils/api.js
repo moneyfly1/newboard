@@ -330,8 +330,8 @@ export const packageAPI = {
 }
 
 export const orderAPI = {
-  createOrder: (data) => api.post('/orders/', data),
-  getUserOrders: (params) => api.get('/orders/user-orders', { params }),
+  createOrder: (data) => api.post('/orders/create', data),
+  getUserOrders: (params) => api.get('/orders/', { params }),
   getOrderStatus: (orderNo) => api.get(`/orders/${orderNo}/status`),
   cancelOrder: (orderNo) => api.post(`/orders/${orderNo}/cancel`),
   getPackages: () => api.get('/packages/')
@@ -466,8 +466,8 @@ export const statisticsAPI = {
 
 export const paymentAPI = {
   getPaymentMethods: () => api.get('/payment-methods/active'),
-  createPayment: (data) => api.post('/create-payment', data),
-  getPaymentStatus: (transactionId) => api.get(`/payment-status/${transactionId}`),
+  createPayment: (data) => api.post('/payment/create', data),
+  getPaymentStatus: (transactionId) => api.get(`/payment/transactions/${transactionId}`),
   getPaymentConfigs: (params) => api.get('/payment-config/', { params }),
   createPaymentConfig: (data) => api.post('/payment-config/', data),
   updatePaymentConfig: (configId, data) => api.put(`/payment-config/${configId}`, data),

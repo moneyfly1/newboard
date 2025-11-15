@@ -272,7 +272,7 @@ export default {
     }
     const loadPaymentMethods = async () => {
       try {
-        const response = await api.get('/payment/methods')
+        const response = await api.get('/payment-methods/active')
         availablePaymentMethods.value = response.data || []
         if (availablePaymentMethods.value.length > 0) {
           selectedPaymentMethod.value = availablePaymentMethods.value[0].key

@@ -573,7 +573,7 @@ export default {
     // 获取可用的支付方式列表
     const loadPaymentMethods = async () => {
       try {
-        const response = await api.get('/payment/methods')
+        const response = await api.get('/payment-methods/active')
         if (response && response.data) {
           // 处理不同的响应格式
           let methods = []
