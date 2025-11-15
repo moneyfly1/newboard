@@ -30,23 +30,29 @@ def get_payment_methods(
     total = len(service.get_payment_methods())
     return PaymentMethodList(items=payment_methods, total=total, page=page, size=size)
 
-@router.get("/active", response_model=List[PaymentMethodPublic])
+@router.get("/active")
 def get_active_payment_methods(db: Session = Depends(get_db)):
-    service = PaymentMethodService(db)
-    methods = service.get_active_payment_methods()
-    return [
-        PaymentMethodPublic(
-            id=method.id,
-            name=method.name,
-            type=method.type,
-            status=method.status,
-            sort_order=method.sort_order,
-            description=method.description,
-            created_at=method.created_at,
-            updated_at=method.updated_at
-        )
-        for method in methods
+    """获取所有启用的支付方式（包括PaymentMethod和PaymentConfig）
+    
+    返回格式与前端期望的格式一致：
+    [
+        {
+            "key": "yipay_alipay",
+            "name": "易支付-支付宝",
+            "description": "使用易支付-支付宝支付",
+            "icon": "/icons/yipay_alipay.png",
+            "enabled": true
+        },
+        ...
     ]
+    """
+    from app.services.payment import PaymentService
+    
+    payment_service = PaymentService(db)
+    # 使用PaymentService的get_available_payment_methods方法，它会同时检查PaymentMethod和PaymentConfig
+    available_methods = payment_service.get_available_payment_methods()
+    
+    return available_methods
 
 @router.get("/{payment_method_id}", response_model=PaymentMethod)
 def get_payment_method(
